@@ -1,0 +1,4 @@
+2026/10/22 16:39:09 FINDEROAD 1.0.0 listening on 127.0.0.1:49265 (pid 5496, parent 5490, darwin/arm64)
+2026/10/22 16:39:17 update check: http://127.0.0.1:18998/latest.json → HTTP 200
+2026/10/22 16:39:17 update installed: 9.9.9 (restart pending)
+2026/10/22 16:39:18 shutdown: 업데이트 후 다시 시작

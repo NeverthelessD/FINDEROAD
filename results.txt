@@ -1,0 +1,43 @@
+PASS  A1 앱을 열면 엔진이 준비됨
+PASS  A2 엔진이 Dock 앱 방식으로 켜짐(shell=native)
+PASS  A3 엔진이 FINDEROAD 앱의 자식 (앱 2875 · 엔진 2881 의 부모 2875)
+PASS  A4 엔진은 하나만 (지금 1개)
+PASS  S1 위쪽 막대 버튼이 눌림 (dark|true)
+PASS  S2 ⌘C 같은 단축키가 화면까지 감 (KeyC+m)
+PASS  S3 휴지통으로 옮기고 되돌리기
+PASS  S4 클립보드에 파일 쓰고 읽기 (Finder 형식)
+PASS  S5 Quick Look 창이 열림
+PASS  S6 신호등 버튼이 위쪽 막대 가운데 (위 여백 18)
+PASS  S7 창 끌기 영역이 깔림 (2개)
+PASS  S8 동영상 분류 버튼으로 찾은 결과가 화면에 나옴 (3줄)
+PASS  B1 확장자만으로 찾기 (mp4, mov → ['드론.mp4', '제주여행_브이로그.mp4', '회의녹화.MOV'])
+PASS  B2 한글 이름(자모가 나뉜 파일 이름)도 찾기 (['제주여행_브이로그.mp4'])
+PASS  B3 숨김 파일은 '숨김 파일도 찾기'일 때만 (3개)
+PASS  B4 Mac 전체에서 찾기: 엔진이 Spotlight 에 물어봄 (이 빌드 서버의 Spotlight 는 시험 폴더를 색인하지 않아서 0개 — mdfind 직접 확인 0개)
+PASS  B5 조건 없이 Mac 전체를 찾으면 안내 (파일 이름이나 확장자를 입력해 주세요)
+PASS  C1 복사 → 붙여넣기
+PASS  C2 같은 이름이면 '이름 2' 로 둘 다 남김
+PASS  C3 이동
+PASS  C4 이동 되돌리기
+PASS  C5 즉시 삭제
+PASS  C6 맥의 기본 폴더는 지우지 않음
+PASS  C7 폴더 통째로 복사
+PASS  D1 Quick Look 썸네일 (200 image/png)
+PASS  D2 동영상을 구간으로 보내기 (HTTP 206)
+PASS  D3 글 미리보기 (안녕하세요)
+PASS  D4 자세한 정보 (만든 날짜)
+PASS  E1 다시 열기 뒤에도 앱 · 엔진 그대로
+PASS  F1 엔진 다시 켜짐 (2881 → 4543)
+PASS  F2 앱은 그대로
+PASS  F3 새 엔진도 앱의 자식
+PASS  G1 앱 · 엔진 모두 꺼짐
+PASS  H1 남은 엔진 없음
+PASS  I1 새로 열린 앱이 엔진을 켬
+PASS  I2 앱이 새로 열림 (4615 → 4637)
+PASS  I3 앱은 하나만 (1개)
+PASS  J1 자동 업데이트로 새 버전을 받아 설치함 (상태: ready)
+PASS  J2 새 버전이 다시 열림
+PASS  J3 응용 프로그램 폴더의 앱이 9.9.9 (9.9.9)
+PASS  J4 이전 버전은 백업에 보관
+PASS  J5 업데이트한 앱의 서명이 그대로
+PASS  Z1 끝나고 남은 프로세스 없음
