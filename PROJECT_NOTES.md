@@ -18,7 +18,7 @@
 - [x] 1. 저장소 뼈대 (이 파일, CLAUDE.md, VERSION, .gitignore, README)
 - [x] 2. 엔진: 검색(Spotlight · 폴더 직접) · 파일 작업 · 미리보기 · 설정 · 업데이트
 - [x] 3. 화면 (web UI)
-- [ ] 4. Swift 앱 껍데기 · Info.plist · 아이콘
+- [x] 4. Swift 앱 껍데기 · Info.plist · 아이콘
 - [ ] 5. 빌드 · 시험 스크립트, 맥 빌드 서버(워크플로)
 - [ ] 6. 리눅스에서 Go 테스트 + Playwright 화면 시험
 - [ ] 7. 사용 가이드 이미지 (docs/FINDEROAD_사용가이드.png)
