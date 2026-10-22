@@ -740,6 +740,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         web.evaluateJavaScript(code) { v, _ in done(v) }
     }
 
+    func after(_ s: Double, _ f: @escaping () -> Void) { DispatchQueue.main.asyncAfter(deadline: .now() + s, execute: f) }
+
+    /// 지금 화면을 그림으로 저장해요 (화면 녹화 권한 없이 앱 창만)
+    func snapshot(_ name: String, _ done: @escaping () -> Void) {
+        web.takeSnapshot(with: nil) { img, _ in
+            if let img = img, let tiff = img.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff),
+               let png = rep.representation(using: .png, properties: [:]) {
+                try? png.write(to: Paths.file(name))
+            }
+            done()
+        }
+    }
+
     func runSelftest() {
         var r: [String: Any] = ["version": engine.build]
         let fm = FileManager.default
@@ -778,42 +791,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let back = (pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL]) ?? []
         r["pasteboard"] = back.first?.path == sample.path
 
-        // 4) 위쪽 막대의 버튼이 눌리는지 (신호등 · 끌기 영역이 가로막지 않는지)
-        evalJS("(()=>{const b=document.querySelector('[data-theme-pick=\"dark\"]').getBoundingClientRect();return [b.left+b.width/2,b.top+b.height/2]})()") { v in
-            if let a = v as? [NSNumber], a.count == 2, let container = self.window.contentView {
-                let p = NSPoint(x: a[0].doubleValue, y: Double(container.bounds.height) - a[1].doubleValue)
-                self.click(at: p)
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                self.evalJS("document.documentElement.dataset.theme + '|' + document.querySelector('[data-theme-pick=\"dark\"]').getAttribute('aria-pressed')") { v in
-                    r["headerClick"] = (v as? String) == "dark|true"
-                    r["headerClickRaw"] = v as? String ?? ""
-                    // 5) 키보드 단축키(⌘C)가 화면까지 가는지
-                    self.evalJS("window.__k=[];document.addEventListener('keydown',e=>window.__k.push(e.code+(e.metaKey?'+m':'')),true);document.activeElement&&document.activeElement.blur();1") { _ in
-                        self.window.makeKeyAndOrderFront(nil)
-                        self.key("c", code: 8, flags: .command)
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                            self.evalJS("window.__k.join(',')") { v in
-                                r["keyToPage"] = (v as? String ?? "").contains("KeyC+m")
-                                r["keyRaw"] = v as? String ?? ""
-                                // 6) Quick Look 창
-                                self.window.qlItems = [sample]
-                                if let panel = QLPreviewPanel.shared() {
-                                    panel.updateController()
-                                    panel.reloadData()
-                                    panel.makeKeyAndOrderFront(nil)
-                                }
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                                    r["quicklook"] = QLPreviewPanel.sharedPreviewPanelExists() && (QLPreviewPanel.shared()?.isVisible ?? false)
-                                    QLPreviewPanel.shared()?.orderOut(nil)
-                                    self.js("document.querySelector('[data-theme-pick=\"system\"]').click()")
-                                    try? fm.removeItem(at: tmpDir)
-                                    let out = Paths.file("selftest.json")
-                                    try? jsonString(r).write(to: out, atomically: true, encoding: .utf8)
-                                    Log.write("자체 시험 결과: \(jsonString(r))")
-                                }
+        // 4) 동영상 분류 버튼을 눌러 검색 → 라이트 화면 저장
+        js("document.querySelector('[data-cat=\"video\"]').click()")
+        after(2.5) {
+            self.evalJS("document.querySelectorAll('#tbody .row').length") { v in
+                r["videoRows"] = (v as? NSNumber)?.intValue ?? -1
+                self.snapshot("shot-light.png") {
+                    // 5) 위쪽 막대의 버튼이 눌리는지 (신호등 · 끌기 영역이 가로막지 않는지) → 다크 화면 저장
+                    self.evalJS("(()=>{const b=document.querySelector('[data-theme-pick=\"dark\"]').getBoundingClientRect();return [b.left+b.width/2,b.top+b.height/2]})()") { v in
+                        if let a = v as? [NSNumber], a.count == 2, let container = self.window.contentView {
+                            self.click(at: NSPoint(x: a[0].doubleValue, y: Double(container.bounds.height) - a[1].doubleValue))
+                        }
+                        self.after(1.0) {
+                            self.evalJS("document.documentElement.dataset.theme + '|' + document.querySelector('[data-theme-pick=\"dark\"]').getAttribute('aria-pressed')") { v in
+                                r["headerClick"] = (v as? String) == "dark|true"
+                                r["headerClickRaw"] = v as? String ?? ""
+                                self.snapshot("shot-dark.png") { self.selftestKeys(r, sample: sample, tmpDir: tmpDir) }
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    // 6) 키보드 단축키(⌘C)가 화면까지 가는지 → 7) Quick Look 창 → 결과 저장
+    func selftestKeys(_ r: [String: Any], sample: URL, tmpDir: URL) {
+        var res = r
+        evalJS("window.__k=[];document.addEventListener('keydown',e=>window.__k.push(e.code+(e.metaKey?'+m':'')),true);document.activeElement&&document.activeElement.blur();1") { _ in
+            self.window.makeKeyAndOrderFront(nil)
+            self.key("c", code: 8, flags: .command)
+            self.after(0.8) {
+                self.evalJS("window.__k.join(',')") { v in
+                    res["keyToPage"] = (v as? String ?? "").contains("KeyC+m")
+                    res["keyRaw"] = v as? String ?? ""
+                    self.window.qlItems = [sample]
+                    if let panel = QLPreviewPanel.shared() {
+                        panel.updateController()
+                        panel.reloadData()
+                        panel.makeKeyAndOrderFront(nil)
+                    }
+                    self.after(1.5) {
+                        res["quicklook"] = QLPreviewPanel.sharedPreviewPanelExists() && (QLPreviewPanel.shared()?.isVisible ?? false)
+                        QLPreviewPanel.shared()?.orderOut(nil)
+                        self.js("document.querySelector('[data-theme-pick=\"system\"]').click()")
+                        try? FileManager.default.removeItem(at: tmpDir)
+                        try? jsonString(res).write(to: Paths.file("selftest.json"), atomically: true, encoding: .utf8)
+                        Log.write("자체 시험 결과: \(jsonString(res))")
                     }
                 }
             }
