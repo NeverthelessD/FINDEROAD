@@ -673,8 +673,8 @@ async function moveSel() {
         if (!to) continue;
         const wasSel = S.sel.delete(it.path);
         it.path = to;
-        it.name = basename(to);
-        it.dir = displayPath(dirname(to));
+        it.name = basename(to).normalize('NFC');
+        it.dir = displayPath(dirname(to)).normalize('NFC');
         if (wasSel) S.sel.add(to);
       }
       renderTable();

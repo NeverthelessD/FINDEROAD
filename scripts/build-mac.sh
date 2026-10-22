@@ -34,7 +34,7 @@ codesign --force --sign - --timestamp=none "$APP/Contents/Resources/finderoad-en
 codesign --force --deep --sign - --timestamp=none "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"
 codesign -dv "$APP" 2>&1 | sed 's/^/  /'
-lipo -archs "$APP/Contents/MacOS/FINDEROAD" "$APP/Contents/Resources/finderoad-engine"
+echo "  앱: $(lipo -archs "$APP/Contents/MacOS/FINDEROAD") · 엔진: $(lipo -archs "$APP/Contents/Resources/finderoad-engine")"
 
 echo "▶ 압축"
 ditto -c -k --norsrc --keepParent "$APP" "$DIST/FINDEROAD-$VERSION.zip"
