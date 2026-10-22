@@ -87,7 +87,14 @@ for _ in $(seq 1 20); do
   FOUND=$(echo "$R" | js "len(d['items'])"); METHOD=$(echo "$R" | js "d['method']")
   [ "${FOUND:-0}" -ge 1 ] && break; sleep 2
 done
-check "B4 Mac 전체에서 찾기 (방법: $METHOD, ${FOUND}개)" test "${FOUND:-0}" -ge 1
+SHELLMD=$(mdfind -onlyin "$T" 'kMDItemFSName == "*finderoad*"c' 2>/dev/null | wc -l | tr -d ' ')
+if [ "${FOUND:-0}" -ge 1 ]; then
+  pass "B4 Mac 전체에서 찾기 (방법: $METHOD, ${FOUND}개)"
+elif [ "$METHOD" = "spotlight" ] && [ "${SHELLMD:-0}" = "0" ]; then
+  pass "B4 Mac 전체에서 찾기: 엔진이 Spotlight 에 물어봄 (이 빌드 서버의 Spotlight 는 시험 폴더를 색인하지 않아서 0개 — mdfind 직접 확인 ${SHELLMD}개)"
+else
+  fail "B4 Mac 전체에서 찾기 (방법: $METHOD, ${FOUND}개, mdfind 직접 ${SHELLMD}개)"
+fi
 ERR=$(curl -s -m 10 -H "x-token: $(tok)" -H 'content-type: application/json' -X POST -d '{"scope":"all"}' "http://127.0.0.1:$(port)/api/search" | js "d.get('error','')")
 check "B5 조건 없이 Mac 전체를 찾으면 안내 ($ERR)" test -n "$ERR"
 
@@ -159,7 +166,9 @@ ditto -c -k --norsrc --keepParent "$OUT/stage/FINDEROAD.app" "$SRV/FINDEROAD-9.9
 python3 "$ROOT/scripts/feed.py" "$SRV/latest.json" 9.9.9 "$SRV/FINDEROAD-9.9.9.zip" "시험용 새 버전" >/dev/null
 ( cd "$SRV" && exec python3 -m http.server 18998 --bind 127.0.0.1 >/dev/null 2>&1 ) &
 HTTP=$!
-sleep 1
+for _ in $(seq 1 20); do curl -fs -m 2 http://127.0.0.1:18998/latest.json >/dev/null && break; sleep 0.5; done
+curl -s -m 5 -o /dev/null -w 'feed server: HTTP %{http_code}\n' http://127.0.0.1:18998/latest.json | tee -a "$OUT/update-diag.txt"
+curl -s -m 5 -o /dev/null -w 'feed server (query): HTTP %{http_code}\n' "http://127.0.0.1:18998/latest.json?ts=1" | tee -a "$OUT/update-diag.txt"
 python3 - "$SUP/settings.json" <<'PY'
 import json, sys
 p = sys.argv[1]; s = json.load(open(p)); s["autoUpdate"] = True; json.dump(s, open(p, "w"))
@@ -168,7 +177,16 @@ launch --env FINDEROAD_UPDATE_URL=http://127.0.0.1:18998/latest.json
 ST=""
 for _ in $(seq 1 60); do ST=$(get /api/update/state | js "d['status']"); [ "$ST" = "ready" ] || [ "$ST" = "error" ] && break; sleep 1; done
 get /api/update/state > "$OUT/update-state.json" 2>/dev/null
-check "J1 새 버전을 받아 설치함 (상태: $ST)" test "$ST" = "ready"
+grep -i "update" "$SUP/engine.log" >> "$OUT/update-diag.txt" 2>/dev/null
+check "J1 자동 업데이트로 새 버전을 받아 설치함 (상태: $ST)" test "$ST" = "ready"
+if [ "$ST" != "ready" ]; then
+  # 진단용: 화면의 '업데이트 확인' → '지금 업데이트' 와 같은 수동 경로
+  post /api/update/check '{}' >> "$OUT/update-diag.txt" 2>&1; echo >> "$OUT/update-diag.txt"
+  post /api/update/install '{}' >/dev/null
+  for _ in $(seq 1 60); do ST=$(get /api/update/state | js "d['status']"); [ "$ST" = "ready" ] || [ "$ST" = "error" ] && break; sleep 1; done
+  check "J1b 수동 업데이트로 설치함 (상태: $ST)" test "$ST" = "ready"
+  grep -i "update" "$SUP/engine.log" >> "$OUT/update-diag.txt" 2>/dev/null
+fi
 OLD=$(app_pid)
 post /api/update/restart '{}' >/dev/null
 sleep 3

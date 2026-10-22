@@ -145,9 +145,11 @@ func fetchLatest() (*Release, error) {
 	req.Header.Set("User-Agent", "FINDEROAD/"+build)
 	resp, err := (&http.Client{Timeout: 20 * time.Second}).Do(req)
 	if err != nil {
+		log.Printf("update check failed: %v", err)
 		return nil, errors.New("업데이트를 확인할 수 없어요. 인터넷 연결을 확인해 주세요")
 	}
 	defer resp.Body.Close()
+	log.Printf("update check: %s → HTTP %d", url, resp.StatusCode)
 	if resp.StatusCode == 404 {
 		return nil, errors.New("아직 등록된 업데이트 정보가 없어요")
 	}
@@ -406,6 +408,7 @@ func download(url, dest string, progress func(done, total int64)) error {
 	req.Header.Set("User-Agent", "FINDEROAD/"+build)
 	resp, err := (&http.Client{Timeout: 15 * time.Minute}).Do(req)
 	if err != nil {
+		log.Printf("update download failed: %v", err)
 		return errors.New("업데이트 파일을 받지 못했어요. 인터넷 연결을 확인해 주세요")
 	}
 	defer resp.Body.Close()

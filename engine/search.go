@@ -508,8 +508,11 @@ func (a *App) handleSearch(w http.ResponseWriter, r *http.Request) {
 
 	if !folders {
 		if spotlightOn("/") {
-			mdfind(ctx, "/", c)
-			note("spotlight", "")
+			if n, _ := mdfind(ctx, "/", c); n == 0 {
+				note("spotlight", "Spotlight 에서 찾지 못했어요. 외장 디스크나 Spotlight 에서 뺀 폴더는 '선택한 폴더'에 넣어 찾아 보세요")
+			} else {
+				note("spotlight", "")
+			}
 		} else {
 			home := q.home
 			if !walk(ctx, home, c, deadline) {
@@ -541,6 +544,9 @@ func (a *App) handleSearch(w http.ResponseWriter, r *http.Request) {
 
 	c.mu.Lock()
 	items := c.items
+	if items == nil {
+		items = []Item{}
+	}
 	capped := c.capped
 	c.mu.Unlock()
 	sort.SliceStable(items, func(i, j int) bool {
