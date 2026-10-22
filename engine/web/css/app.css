@@ -304,9 +304,18 @@ body.drop-on .side { box-shadow: inset 0 0 0 2px var(--accent); }
 .offline div { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 22px 28px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); }
 .offline span { color: var(--muted); font-size: 12.5px; }
 
-@media (max-width: 1180px) {
+/* 창이 좁을 때: 작업 버튼의 단축키 → 글자 순서로 줄여서 한 줄에 맞춰요 (마우스를 올리면 이름이 나와요) */
+.toolbar { flex-wrap: nowrap; min-width: 0; }
+.toolbar .res, .toolbar .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+@media (max-width: 1380px) { .btn.tool kbd { display: none; } }
+@media (max-width: 1240px) {
   .pv { flex-basis: 260px; }
   .side { flex-basis: 212px; }
   .seg button span { display: none; }
+  .toolbar .sub { display: none; }
+}
+@media (max-width: 1180px) {
+  .btn.tool .t { display: none; }
+  .btn.tool { width: 34px; padding: 0; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

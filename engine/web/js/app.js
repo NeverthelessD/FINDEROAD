@@ -909,8 +909,11 @@ function fillMedia(el, it, seq) {
     v.controls = true;
     v.preload = 'metadata';
     v.playsInline = true;
-    v.onerror = () => { if (seq === pvSeq) tryThumb(el, it, seq, '앱에서 열어 재생해 주세요'); };
-    v.onloadedmetadata = () => { if (seq === pvSeq) { el.className = 'media dark'; } };
+    let loaded = false;
+    const fallback = () => { if (seq === pvSeq && !loaded) { v.removeAttribute('src'); v.load(); tryThumb(el, it, seq, '앱에서 열어 재생해 주세요'); } };
+    v.onerror = fallback;
+    v.onloadedmetadata = () => { loaded = v.duration > 0 || v.videoWidth > 0; if (!loaded) fallback(); };
+    setTimeout(fallback, 4000); // 재생할 수 없는 파일은 오류 없이 멈춰 있기도 해서, 4초 안에 준비되지 않으면 썸네일로 바꿔요
     v.src = fileURL(it.path);
     el.className = 'media dark';
     el.innerHTML = '';

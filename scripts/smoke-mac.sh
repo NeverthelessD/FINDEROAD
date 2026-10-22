@@ -80,14 +80,14 @@ check "B1 확장자만으로 찾기 (mp4, mov → $N)" test "$N" = "['드론.mp4
 N=$(q "{\"name\":\"제주 브이로그\",\"scope\":\"folders\",\"folders\":[\"$T\"]}" | js "[i['name'] for i in d['items']]")
 check "B2 한글 이름(자모가 나뉜 파일 이름)도 찾기 ($N)" test "$N" = "['제주여행_브이로그.mp4']"
 N=$(q "{\"ext\":\"mp4\",\"scope\":\"folders\",\"folders\":[\"$T\"],\"hidden\":true}" | js "len(d['items'])")
-check "B3 숨김 파일은 '숨김 파일도 찾기'일 때만 ($N개)" test "$N" = "3"
+check "B3 숨김 파일은 '숨김 파일도 찾기'일 때만 (${N}개)" test "$N" = "3"
 FOUND=""; METHOD=""
 for _ in $(seq 1 20); do
   R=$(q '{"name":"finderoad스모크고유","scope":"all"}')
   FOUND=$(echo "$R" | js "len(d['items'])"); METHOD=$(echo "$R" | js "d['method']")
   [ "${FOUND:-0}" -ge 1 ] && break; sleep 2
 done
-check "B4 Mac 전체에서 찾기 (방법: $METHOD, $FOUND개)" test "${FOUND:-0}" -ge 1
+check "B4 Mac 전체에서 찾기 (방법: $METHOD, ${FOUND}개)" test "${FOUND:-0}" -ge 1
 ERR=$(curl -s -m 10 -H "x-token: $(tok)" -H 'content-type: application/json' -X POST -d '{"scope":"all"}' "http://127.0.0.1:$(port)/api/search" | js "d.get('error','')")
 check "B5 조건 없이 Mac 전체를 찾으면 안내 ($ERR)" test -n "$ERR"
 
