@@ -1,1 +1,185 @@
-<!doctype html><title>FINDEROAD</title>
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>FINDEROAD</title>
+<link rel="stylesheet" href="fonts/plex-sans-kr.css">
+<link rel="stylesheet" href="fonts/plex-mono.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="app" id="app">
+
+<header class="hdr" id="hdr">
+  <div class="lights" aria-hidden="true"><i></i><i></i><i></i></div>
+  <div class="brand" data-drag>
+    <svg class="logo" aria-hidden="true" width="28" height="28" viewBox="0 0 26 26">
+      <rect x="0" y="0" width="26" height="26" rx="7" fill="#C2410C"/>
+      <path d="M15 0H19A7 7 0 0 1 26 7V19A7 7 0 0 1 19 26H12C15 22 9 18 13 14C17 10 10 6 15 0Z" fill="#F28A4B"/>
+      <path d="M8 8.5v3.5" fill="none" stroke="#1A1A1C" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="19" cy="10.5" r="3.6" fill="#FFFFFF" fill-opacity="0.32" stroke="#1A1A1C" stroke-width="1.6"/>
+      <path d="M19 9.2v2.6" fill="none" stroke="#1A1A1C" stroke-width="2" stroke-linecap="round"/>
+      <path d="M16.65 9.65A2.5 2.5 0 0 1 17.75 8.33" fill="none" stroke="#FFFFFF" stroke-width="0.9" stroke-linecap="round" stroke-opacity="0.9"/>
+      <path d="M21.97 13.47L24.23 15.73" fill="none" stroke="#1A1A1C" stroke-width="2.4" stroke-linecap="round"/>
+    </svg>
+    <span class="wordmark" aria-label="FINDEROAD">FINDE<span class="r" aria-hidden="true">R<span>R</span></span><span class="oad" aria-hidden="true">OAD</span></span>
+  </div>
+  <div class="hdr-space" data-drag></div>
+  <div class="seg" role="group" aria-label="화면 모드" id="themeSeg">
+    <button type="button" data-theme-pick="system" aria-pressed="true">
+      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" class="ic"><rect x="2" y="2.5" width="12" height="8.5" rx="1.2"/><path d="M6 14h4M8 11v3"/></svg><span>시스템</span>
+    </button>
+    <button type="button" data-theme-pick="light" aria-pressed="false">
+      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" class="ic"><circle cx="8" cy="8" r="2.8"/><path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1"/></svg><span>라이트</span>
+    </button>
+    <button type="button" data-theme-pick="dark" aria-pressed="false">
+      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" class="ic"><path d="M13 9.5A5.5 5.5 0 0 1 6.5 3a5.5 5.5 0 1 0 6.5 6.5z"/></svg><span>다크</span>
+    </button>
+  </div>
+  <span class="ver" id="ver" title="지금 버전">v—</span>
+  <div class="upd-wrap">
+    <button type="button" class="btn" id="updBtn" aria-expanded="false" aria-controls="updPop">
+      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" class="ic"><path d="M13 8a5 5 0 1 1-1.5-3.6"/><path d="M13 2.5v3h-3"/></svg>
+      <span>업데이트 확인</span><i class="dot" id="updDot" hidden></i>
+    </button>
+    <div class="pop" id="updPop" role="dialog" aria-label="업데이트" hidden>
+      <div class="pop-top"><span class="pop-title">업데이트</span><span class="chip-ver" id="updVer">v—</span></div>
+      <p class="pop-msg" id="updMsg">최신 버전을 사용 중입니다</p>
+      <p class="pop-sub" id="updSub"></p>
+      <div class="bar" id="updBar" hidden><i></i></div>
+      <ul class="notes" id="updNotes" hidden></ul>
+      <div class="pop-line"></div>
+      <div class="pop-row">
+        <div class="pop-col"><span class="pop-strong">자동 업데이트</span><span class="pop-sub">새 버전이 나오면 앱이 알아서 받아요</span></div>
+        <button type="button" class="switch" id="autoSw" role="switch" aria-checked="true" aria-label="자동 업데이트"><i></i></button>
+      </div>
+      <div class="pop-actions">
+        <button type="button" class="btn primary" id="updAct">지금 확인</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="body">
+
+<aside class="side" aria-label="검색 범위">
+  <span class="label">검색 범위</span>
+  <button type="button" class="scope" id="scopeAll" aria-pressed="true"><i class="radio"></i><span>Mac 전체</span></button>
+  <button type="button" class="scope" id="scopeFolders" aria-pressed="false"><i class="radio"></i><span>선택한 폴더</span><span class="count" id="folderCount">0</span></button>
+  <div class="folders" id="folders">
+    <div id="folderList"></div>
+    <button type="button" class="add" id="addFolder">
+      <svg aria-hidden="true" width="13" height="13" viewBox="0 0 16 16" class="ic"><path d="M8 3v10M3 8h10"/></svg>폴더 추가
+    </button>
+    <span class="hint">Finder에서 폴더를 끌어다 놓아도 추가됩니다. 하위 폴더까지 함께 검색합니다.</span>
+  </div>
+  <label class="check"><input type="checkbox" id="hiddenChk"><span>숨김 · 시스템 파일도 찾기</span></label>
+  <div class="grow"></div>
+  <span class="label">단축키</span>
+  <div class="keys" id="keys"></div>
+</aside>
+
+<main class="main">
+  <div class="search">
+    <label class="field name">
+      <span class="flabel">파일 이름</span>
+      <span class="fbox">
+        <svg aria-hidden="true" width="15" height="15" viewBox="0 0 16 16" class="ic fic"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
+        <input type="text" id="qName" placeholder="비워 두면 이름과 상관없이 검색" autocomplete="off" spellcheck="false">
+      </span>
+    </label>
+    <label class="field ext">
+      <span class="flabel">확장자</span>
+      <span class="fbox">
+        <span class="star" aria-hidden="true">*.</span>
+        <input type="text" id="qExt" placeholder="mp4, mov" autocomplete="off" spellcheck="false">
+      </span>
+    </label>
+    <button type="button" class="btn primary big" id="goBtn">검색</button>
+  </div>
+
+  <div class="chips" role="group" aria-label="분류">
+    <span class="flabel">분류</span>
+    <div class="chip-list" id="chips"></div>
+  </div>
+
+  <div class="toolbar">
+    <span class="res" id="resLabel">결과</span>
+    <span class="sub" id="sortLabel"></span>
+    <div class="grow"></div>
+    <button type="button" class="btn tool" id="opCopy" disabled>
+      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" class="ic"><rect x="5" y="5" width="8.5" height="8.5" rx="1.5"/><path d="M10.5 5V3.5A1.5 1.5 0 0 0 9 2H3.5A1.5 1.5 0 0 0 2 3.5V9a1.5 1.5 0 0 0 1.5 1.5H5"/></svg>
+      복사<kbd>⌘C</kbd>
+    </button>
+    <button type="button" class="btn tool" id="opPaste">
+      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" class="ic"><rect x="3" y="3" width="10" height="11" rx="1.5"/><path d="M6 3V2h4v1M6 8h4M6 10.5h3"/></svg>
+      붙여넣기<kbd>⌘V</kbd>
+    </button>
+    <button type="button" class="btn tool" id="opMove" disabled>
+      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" class="ic"><path d="M2 8h9M8 4.5 11.5 8 8 11.5M13.5 3v10"/></svg>
+      이동…
+    </button>
+    <span class="vsep" aria-hidden="true"></span>
+    <button type="button" class="btn tool danger" id="opTrash" disabled>
+      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" class="ic"><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.2a1 1 0 0 0 1 .8h4.6a1 1 0 0 0 1-.8L12 4"/></svg>
+      휴지통으로<kbd>⌘⌫</kbd>
+    </button>
+    <button type="button" class="btn tool danger" id="opDelete" disabled title="휴지통을 거치지 않고 바로 지워요 (⌘⌥⌫)">
+      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" class="ic"><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.2a1 1 0 0 0 1 .8h4.6a1 1 0 0 0 1-.8L12 4M6.5 7l3 4M9.5 7l-3 4"/></svg>
+      즉시 삭제
+    </button>
+  </div>
+
+  <div class="table" id="table">
+    <div class="thead" role="row">
+      <button type="button" class="th" data-sort="name">이름<i></i></button>
+      <button type="button" class="th" data-sort="dir">위치<i></i></button>
+      <button type="button" class="th num" data-sort="size">크기<i></i></button>
+      <button type="button" class="th num" data-sort="mtime">수정일<i></i></button>
+    </div>
+    <div class="tbody" id="tbody" role="listbox" aria-label="검색 결과" aria-multiselectable="true" tabindex="0"></div>
+    <div class="empty" id="empty"></div>
+    <div class="loading" id="loading" hidden><i></i></div>
+  </div>
+</main>
+
+<aside class="pv" id="pv" aria-label="미리보기">
+  <div class="pv-top">
+    <span class="label">미리보기</span>
+    <kbd title="Space 를 누르면 Quick Look 으로 크게 볼 수 있어요">Space</kbd>
+  </div>
+  <div id="pvBody" class="pv-body"></div>
+</aside>
+
+</div>
+
+<footer class="foot">
+  <span id="statusLeft">Mac 전체</span>
+  <span aria-hidden="true" class="sep">·</span>
+  <span id="statusMsg" class="msg">준비됐어요</span>
+  <div class="grow"></div>
+  <span class="made">made by. Nevertheless_D</span>
+</footer>
+
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden><span id="toastMsg"></span><button type="button" class="tlink" id="toastAct" hidden></button></div>
+<div class="menu" id="menu" role="menu" hidden></div>
+<div class="modal" id="modal" hidden>
+  <div class="dlg" role="alertdialog" aria-modal="true" aria-labelledby="dlgTitle" aria-describedby="dlgText">
+    <h2 id="dlgTitle"></h2>
+    <p id="dlgText"></p>
+    <ul id="dlgList" class="dlg-list"></ul>
+    <div class="dlg-actions">
+      <button type="button" class="btn" id="dlgNo">취소</button>
+      <button type="button" class="btn danger-fill" id="dlgYes">확인</button>
+    </div>
+  </div>
+</div>
+<div class="offline" id="offline" hidden><div><b>엔진과 연결이 끊겼어요</b><span>다시 연결하는 중…</span></div></div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
