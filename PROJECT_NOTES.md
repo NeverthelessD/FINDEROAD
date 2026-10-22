@@ -22,16 +22,25 @@
 - [x] 5. 빌드 · 시험 스크립트, 맥 빌드 서버(워크플로)
 - [x] 6. 리눅스에서 Go 테스트 + Playwright 화면 시험
 - [x] 7. 사용 가이드 이미지 (docs/FINDEROAD_사용가이드.png)
-- [ ] 8. 맥 빌드 서버 결과 확인 → v1.0.0 릴리스 (releases/latest.json)
-- [ ] 9. 설치 파일 · 가이드 이미지 전달
+- [x] 8. 맥 빌드 서버 결과 확인 → v1.0.0 릴리스 (releases/latest.json) — 실제 맥 시험 43개 모두 통과
+- [x] 9. 설치 파일 · 가이드 이미지 전달
+
+### 다음에 할 수 있는 일
+- [ ] 사용자 맥에서 v1.0.0 실행 확인 (특히 Mac 전체 검색 — 빌드 서버의 Spotlight 는 새 파일을 색인하지 않아 실제 Spotlight 결과는 시험하지 못함)
+- [ ] (사용자가 원하면) Apple 개발자 서명 · 공증 → 처음 열 때 경고 없애기
 
 ### 작업 기록
+- 2026-10-23 **v1.0.0 릴리스.** 맥 빌드 서버(macOS 15.7, Apple Silicon)에서 43개 시험 통과: 켜기 · 엔진이 앱의 자식 · 자체 시험(위쪽 막대 클릭,
+  ⌘C 가 화면까지 감, 휴지통, 클립보드, Quick Look, 신호등 위치, 끌기 영역, 동영상 분류 검색) · 검색(확장자만, NFD 한글 이름, 숨김) ·
+  파일 작업(복사 · 같은 이름 · 이동 · 되돌리기 · 즉시 삭제 · 기본 폴더 보호 · 폴더 복사) · 미리보기(썸네일 · 구간 전송 · 글 · 정보) ·
+  다시 열기 · 엔진 고장 복구 · ⌘Q · 앱 강제 종료 시 엔진도 끝남 · 업데이트 재시작 · **실제 업데이트(가짜 9.9.9 를 받아 설치 → 다시 열기 → 백업 · 서명 유지)**.
+  업데이트 시험이 한 번 실패했던 건 시험용 서버가 아직 안 켜졌던 것 → 시험 스크립트가 서버 준비를 기다리게 함. 업데이트 확인 실패 원인은 이제 engine.log 에 남음.
 - 2026-10-23 맥 빌드 서버 1차 결과: Swift 빌드 통과, 자체 시험(위쪽 막대 클릭 · ⌘C 전달 · 휴지통 · 클립보드 · Quick Look · 신호등 위치 · 끌기 영역) 모두 통과.
   고친 것: macOS 기본 bash 3.2 는 `$N개` 처럼 변수 뒤에 한글이 붙으면 변수 이름으로 읽음 → 스크립트에서 `${N}개` 로.
   좁은 창에서 작업 버튼이 두 줄이 되던 것 → 1380px 아래는 단축키 숨김, 1180px 아래는 아이콘만. 재생 못 하는 동영상은 4초 뒤 썸네일로.
 - 2026-10-23 시작. 디자인 확정 후 개발 착수.
 
-## 구조 (계획)
+## 구조
 
 ```
 app/shell/main.swift   FINDEROAD.app 본체(Swift/AppKit): Dock 아이콘 · 메뉴 · WKWebView 창 · 엔진(자식) 실행/종료 ·
@@ -48,8 +57,25 @@ engine/                Go 엔진(표준 라이브러리만). 화면(web/)을 내
   web/                 index.html · css · js · fonts(IBM Plex Sans KR · IBM Plex Mono)
 scripts/               build-mac.sh · smoke-mac.sh · ci-mac.sh · release.sh · feed.py · guide.py · icon.py
 releases/              FINDEROAD-x.y.z.zip · latest.json
-docs/                  사용 가이드 이미지와 원본(guide.html)
+docs/                  사용 가이드 이미지와 원본(guide.html · guide-screen.png). 고친 뒤 scripts/guide.py
+.github/workflows/build-mac.yml   맥 빌드 서버 (app/ · engine/ · scripts/ · VERSION · 가이드 이미지가 바뀌면 자동 실행)
 ```
+실행 사슬: FINDEROAD.app(Swift, Dock) → finderoad-engine(앱 묶음 안의 Go, 자식 하나). 주소는 127.0.0.1 의 빈 포트(엔진이 표준 출력으로
+`FINDEROAD_PORT=` 한 줄을 알려 줌) + 실행마다 새 토큰. 엔진은 표준 입력이 닫히거나(앱이 사라짐) 부모가 바뀌면 끝나고, 종료 신호는 언제나 따름.
+앱은 엔진이 고장으로 꺼지면 2분에 3번까지 다시 켬. 엔진이 코드 0 으로 끝나면 앱도 끝남(restart-requested 가 있으면 새 버전으로 다시 열기).
+
+화면 ↔ 맥 기능: `window.webkit.messageHandlers.fr.postMessage({cmd, …})` (답을 돌려받는 방식). cmd: ready · appearance · dragRegions ·
+chooseFolders · trash · pbWriteFiles · pbReadFiles · pbWriteText · quicklook. 맥 앱이 화면에 알리는 것: `FR.drop(paths)` · `FR.dragging(on)` · `FR.fullscreen(on)`.
+브라우저(시험)에서는 같은 일을 엔진의 대체 API(/api/clipboard · /api/trash · /api/choose-folder)가 해요.
+창: 제목 막대를 투명하게 하고 화면을 끝까지 채움(fullSizeContentView). 신호등 버튼은 52pt 위쪽 막대 가운데로 옮기고,
+화면이 알려 준 빈 곳(로고 · 가운데 빈칸)에 투명한 DragView 를 깔아 창을 끌 수 있게 함.
+
+### 시험하는 법
+- 리눅스: `cd engine && go test ./...`, 엔진을 `FINDEROAD_SUPPORT · FINDEROAD_TOKEN · FINDEROAD_PORT · FINDEROAD_TEST_CHOOSE(대상 폴더) ·
+  FINDEROAD_UPDATE_URL` 로 켜고 Playwright 로 http://127.0.0.1:포트/?t=토큰 을 열어 시험 (Quick Look · 휴지통은 대체 API).
+- 맥: 맥 빌드 서버(scripts/smoke-mac.sh). 앱을 `FINDEROAD_SELFTEST=1` 로 켜면 Swift 가 스스로 맥 기능을 시험하고
+  Support/selftest.json · shot-light.png · shot-dark.png 를 남김.
+- 빌드 서버의 Spotlight 는 새로 만든 파일을 색인하지 않아요 → Mac 전체 검색은 'Spotlight 에 물어봤는지'까지만 확인.
 
 ## 결정 사항
 
@@ -68,4 +94,17 @@ docs/                  사용 가이드 이미지와 원본(guide.html)
   범위: Mac 전체 또는 선택한 폴더(여러 개, 하위 폴더 포함). 초성 검색은 하지 않음(사용자 결정).
 - 삭제: 기본은 휴지통으로(⌘⌫, ⌘Z 로 되돌리기). **즉시 삭제**(⌘⌥⌫)는 확인 창을 거친 뒤 되돌릴 수 없게 지움.
 - 붙여넣기 · 이동: 검색 결과에는 '현재 폴더'가 없으므로 대상 폴더를 고르는 창을 띄운다. 같은 이름이 있으면 '파일 2.mp4' 처럼 둘 다 남긴다.
+- 즉시 삭제 · 이동 · 휴지통은 시스템 폴더 · 디스크 맨 위 · 홈 폴더와 그 기본 폴더(문서 · 데스크탑 등) 자체를 막음 (엔진 protectedPath · Swift 같은 규칙).
+- Mac 전체 검색은 숨김 · 시스템 · ~/Library 를 빼되 iCloud Drive(~/Library/Mobile Documents) · 클라우드 폴더(~/Library/CloudStorage)는 넣음.
+  앱 · 사진 보관함 같은 묶음 폴더는 하나의 항목으로만 보고 안을 들여다보지 않음. 결과는 최대 30,000개를 모아 최근 수정 순 2,000개만 보여 줌.
+- 되돌리기는 마지막 작업 하나(붙여넣기 → 붙여넣은 것을 휴지통으로, 이동 · 휴지통 → 원래 자리로).
+
+## 업데이트 내보내는 법 (Claude용)
+
+1. 수정 → `VERSION` 올리기 → 커밋 · 푸시 (app/ · engine/ · scripts/ · VERSION 이 바뀌면 맥 빌드 서버가 자동으로 돎, 5~10분)
+2. `git fetch origin +refs/heads/ci-results:refs/remotes/origin/ci-results` 로 결과가 새 커밋인지 확인 →
+   `git archive origin/ci-results | tar -x -C <임시폴더>` → status.json(build/smoke 모두 ok), results.txt, shot-*.png 확인
+3. `scripts/release.sh --notes "바뀐 점 1" "바뀐 점 2"` (사용자가 읽는 한국어 문구, GitHub 언급 없이) → releases/ 커밋 · 푸시.
+   처음 설치용은 dist/FINDEROAD.zip (가이드 이미지 포함). releases/ 에는 최신 zip 3개만 남김.
+
 - 커밋 작성자: `Nevertheless_D <NeverthelessD@users.noreply.github.com>`
