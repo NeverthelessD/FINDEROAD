@@ -20,8 +20,8 @@
 - [x] 3. 화면 (web UI)
 - [x] 4. Swift 앱 껍데기 · Info.plist · 아이콘
 - [x] 5. 빌드 · 시험 스크립트, 맥 빌드 서버(워크플로)
-- [ ] 6. 리눅스에서 Go 테스트 + Playwright 화면 시험
-- [ ] 7. 사용 가이드 이미지 (docs/FINDEROAD_사용가이드.png)
+- [x] 6. 리눅스에서 Go 테스트 + Playwright 화면 시험
+- [x] 7. 사용 가이드 이미지 (docs/FINDEROAD_사용가이드.png)
 - [ ] 8. 맥 빌드 서버 결과 확인 → v1.0.0 릴리스 (releases/latest.json)
 - [ ] 9. 설치 파일 · 가이드 이미지 전달
 
