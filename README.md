@@ -1,5 +1,11 @@
 # FINDEROAD
 
+## ⬇️ 앱 받기
+
+**[FINDEROAD.zip 받기 (macOS)](https://github.com/NeverthelessD/FINDEROAD/raw/main/download/FINDEROAD.zip)**
+
+항상 가장 최신판이에요. zip 안에 앱과 사용 가이드가 함께 들어 있어요.
+
 파일 검색 · 미리보기 · 복사 · 붙여넣기 · 이동 · 삭제 (macOS · Apple Silicon) — made by. Nevertheless_D
 
 - **찾기**: 파일 이름, 확장자(이름 없이 `mp4` 만 써도 됨), 분류 버튼(동영상 · 이미지 · 문서 · 음악 · 압축 · 코드)
@@ -11,7 +17,7 @@
 
 ## 설치
 
-1. [`releases/`](releases) 폴더에서 가장 최신 `FINDEROAD-x.y.z.zip`을 받아 압축을 풀어요.
+1. 위의 **앱 받기**에서 `FINDEROAD.zip`을 받아 압축을 풀어요. (안에 앱과 사용 가이드가 들어 있어요)
 2. `FINDEROAD.app`을 **응용 프로그램** 폴더로 옮겨요. (업데이트가 동작하려면 꼭 옮겨 주세요)
 3. 처음 열 때 경고가 뜨면 **시스템 설정 → 개인정보 보호 및 보안 → "그래도 열기"**.
 
