@@ -1,0 +1,4 @@
+feed server: HTTP 200
+feed server (query): HTTP 200
+2026/10/31 11:12:44 update check: http://127.0.0.1:18998/latest.json → HTTP 200
+2026/10/31 11:12:44 update installed: 9.9.9 (restart pending)

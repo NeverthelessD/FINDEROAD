@@ -1,0 +1,2 @@
+03b1a1fc0c1c3a165c1aee05fb0e74ae8ea8cac4353d7f160382993a4e775280  /Users/runner/work/FINDEROAD/FINDEROAD/ci-out/FINDEROAD-1.0.1.zip
+53e29c78abc4b20eedc81d15f9f4720288b83f858d286219864b87700fb79fe7  /Users/runner/work/FINDEROAD/FINDEROAD/ci-out/FINDEROAD-first-install.zip

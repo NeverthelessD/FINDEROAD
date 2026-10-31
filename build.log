@@ -1,0 +1,31 @@
+▶ 엔진 테스트 · 빌드 (darwin/arm64, v1.0.1)
+ok  	finderoad	0.026s
+▶ 앱 껍데기 빌드 (Swift)
+swift-driver version: 1.120.5 Apple Swift version 6.1.2 (swiftlang-6.1.2.1.2 clang-1700.0.13.5)
+Target: arm64-apple-macosx15.0
+/Users/runner/work/FINDEROAD/FINDEROAD/dist/FINDEROAD.app/Contents/Info.plist: OK
+▶ 임시 서명 (ad-hoc) · 확인
+/Users/runner/work/FINDEROAD/FINDEROAD/dist/FINDEROAD.app/Contents/Resources/finderoad-engine: replacing existing signature
+/Users/runner/work/FINDEROAD/FINDEROAD/dist/FINDEROAD.app: replacing existing signature
+/Users/runner/work/FINDEROAD/FINDEROAD/dist/FINDEROAD.app: valid on disk
+/Users/runner/work/FINDEROAD/FINDEROAD/dist/FINDEROAD.app: satisfies its Designated Requirement
+  Executable=/Users/runner/work/FINDEROAD/FINDEROAD/dist/FINDEROAD.app/Contents/MacOS/FINDEROAD
+  Identifier=com.nevertheless-d.finderoad
+  Format=app bundle with Mach-O thin (arm64)
+  CodeDirectory v=20400 size=2773 flags=0x2(adhoc) hashes=80+3 location=embedded
+  Signature=adhoc
+  Info.plist entries=24
+  TeamIdentifier=not set
+  Sealed Resources version=2 rules=13 files=3
+  Internal requirements count=0 size=12
+  앱: arm64 · 엔진: arm64
+▶ 압축
+▶ 업데이트 파일을 풀어도 서명이 그대로인지 확인 (앱의 업데이트 기능처럼 unzip)
+total 27672
+drwxr-xr-x   6 runner  staff      192 Oct 31 11:12 .
+drwxr-xr-x  17 runner  staff      544 Oct 31 11:11 ..
+-rw-r--r--   1 runner  staff  6658159 Oct 31 11:12 FINDEROAD-1.0.1.zip
+drwxr-xr-x   3 runner  staff       96 Oct 31 11:11 FINDEROAD.app
+-rw-r--r--   1 runner  staff  7507861 Oct 31 11:12 FINDEROAD.zip
+drwxr-xr-x   3 runner  staff       96 Oct 31 11:12 first
+✔ dist/FINDEROAD-1.0.1.zip · dist/FINDEROAD.zip
