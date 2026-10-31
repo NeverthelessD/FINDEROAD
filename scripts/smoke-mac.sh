@@ -39,6 +39,7 @@ def w(p, data=b"x" * 2048):
     open(p, "wb").write(data)
 w(os.path.join(t, "영상", unicodedata.normalize("NFD", "제주여행_브이로그.mp4")))   # Finder 처럼 자모가 나뉜 이름
 w(os.path.join(t, "영상", "회의녹화.MOV"))
+w(os.path.join(t, "문서", unicodedata.normalize("NFD", "호랑이님 증명사진.jpg")))   # 이름 일부로 찾기 시험
 w(os.path.join(t, "영상", "깊은", "폴더", "드론.mp4"))
 w(os.path.join(t, "영상", ".숨김.mp4"))
 w(os.path.join(t, "문서", "메모.txt"), "FINDEROAD 시험\n안녕하세요\n".encode())
@@ -79,6 +80,15 @@ N=$(q "{\"ext\":\"mp4, mov\",\"scope\":\"folders\",\"folders\":[\"$T\"]}" | js "
 check "B1 확장자만으로 찾기 (mp4, mov → $N)" test "$N" = "['드론.mp4', '제주여행_브이로그.mp4', '회의녹화.MOV']"
 N=$(q "{\"name\":\"제주 브이로그\",\"scope\":\"folders\",\"folders\":[\"$T\"]}" | js "[i['name'] for i in d['items']]")
 check "B2 한글 이름(자모가 나뉜 파일 이름)도 찾기 ($N)" test "$N" = "['제주여행_브이로그.mp4']"
+for KW in 호랑이 랑이님 호랑이님증명사진 "증명 사진"; do
+  N=$(q "{\"name\":\"$KW\",\"scope\":\"folders\",\"folders\":[\"$T\"]}" | js "[i['name'] for i in d['items']]")
+  check "B2+ 이름 일부로 찾기 ('$KW' → $N)" test "$N" = "['호랑이님 증명사진.jpg']"
+done
+for _ in $(seq 1 3); do
+  N=$(q '{"name":"호랑이","scope":"all"}' | js "len([i for i in d['items'] if i['name']=='호랑이님 증명사진.jpg'])")
+  [ "${N:-0}" -ge 1 ] && break; sleep 2
+done
+check "B2* Mac 전체에서도 이름 일부로 찾기 ('호랑이' → ${N}개)" test "${N:-0}" -ge 1
 N=$(q "{\"ext\":\"mp4\",\"scope\":\"folders\",\"folders\":[\"$T\"],\"hidden\":true}" | js "len(d['items'])")
 check "B3 숨김 파일은 '숨김 파일도 찾기'일 때만 (${N}개)" test "$N" = "3"
 FOUND=""; METHOD=""

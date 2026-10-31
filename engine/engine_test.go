@@ -161,9 +161,39 @@ func TestCleanRoots(t *testing.T) {
 func TestMdQuery(t *testing.T) {
 	q := newQuery(SearchReq{Name: `여행 "x*`, Ext: "mp4,mov"})
 	s := mdQuery(q)
-	want := `(kMDItemFSName == "*여행*"cd || kMDItemFSName == "*` + decomposeHangul("여행") + `*"cd) && kMDItemFSName == "*x*"cd && (kMDItemFSName == "*.mp4"c || kMDItemFSName == "*.mov"c)`
+	d := decomposeHangul("여행")
+	want := `(kMDItemFSName == "*여행*"cd || kMDItemFSName == "*여행*"c || kMDItemDisplayName == "*여행*"cd || ` +
+		`kMDItemFSName == "*` + d + `*"cd || kMDItemFSName == "*` + d + `*"c || kMDItemDisplayName == "*` + d + `*"cd) && ` +
+		`(kMDItemFSName == "*x*"cd || kMDItemFSName == "*x*"c || kMDItemDisplayName == "*x*"cd) && ` +
+		`(kMDItemFSName == "*.mp4"c || kMDItemFSName == "*.mov"c)`
 	if s != want {
 		t.Fatalf("got  %s\nwant %s", s, want)
+	}
+}
+
+// 이름의 일부만 써도 찾기 ('호랑이' → '호랑이님 증명사진.jpg'), 띄어쓰기는 있든 없든
+func TestPartialHangulMatch(t *testing.T) {
+	file := "호랑이님 증명사진.jpg"
+	cases := map[string]bool{
+		"호랑이": true, "호랑": true, "랑이님": true, "증명": true, "사진": true, "호랑이 사진": true,
+		"호랑이님증명사진": true, "증명 사진": true, "호랑이님_증명사진": true, "님 증": true,
+		"고양이": false, "호랑이 고양이": false, "사진호랑이": false,
+	}
+	for term, want := range cases {
+		q := newQuery(SearchReq{Name: term})
+		for _, name := range []string{file, decomposeHangul(file)} {
+			if got := q.nameMatches(name, false); got != want {
+				t.Errorf("검색어 %q, 이름 %q: got %v want %v", term, name, got, want)
+			}
+		}
+	}
+	// 직접 훑기로도 찾는지
+	root := t.TempDir()
+	mk(t, root, decomposeHangul(file), "다른 파일.jpg")
+	c := newCollector(newQuery(SearchReq{Name: "호랑이"}))
+	walk(context.Background(), root, c, time.Now().Add(time.Minute))
+	if got := names(c.items); !reflect.DeepEqual(got, []string{file}) {
+		t.Fatalf("walk got %v", got)
 	}
 }
 

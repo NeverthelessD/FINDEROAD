@@ -45,6 +45,9 @@ const (
 	collectCap = 30000
 	returnCap  = 2000
 	walkBudget = 25 * time.Second
+	// Spotlight 가 한글 이름의 일부(예: '호랑이님' 안의 '호랑이')를 놓치는 맥이 있어서,
+	// Spotlight 로 찾은 뒤에도 홈 폴더(또는 고른 폴더)를 잠깐 직접 훑어 빠진 파일을 채워요.
+	backupWalkBudget = 8 * time.Second
 )
 
 // 안을 들여다보지 않는 묶음 폴더(앱 · 사진 보관함 등). 이름이 맞으면 하나의 항목으로 보여 줘요.
@@ -143,10 +146,30 @@ func cleanQueryText(s string) string {
 	}, s)
 }
 
+// compactName: 띄어쓰기 · 밑줄 · 하이픈을 뺀 이름 ('증명 사진' = '증명_사진' = '증명사진')
+func compactName(s string) string {
+	return strings.Map(func(r rune) rune {
+		switch r {
+		case ' ', '_', '-', '\u3000', '\u00a0', '\t':
+			return -1
+		}
+		return r
+	}, s)
+}
+
+// nameMatches: 검색어가 이름 어디에든 들어 있으면 찾아요 ('호랑이' → '호랑이님 증명사진.jpg').
+// 띄어쓰기 · 밑줄 · 하이픈은 있든 없든 같게 봐요 ('호랑이님증명사진' → '호랑이님 증명사진.jpg').
 func (q *query) nameMatches(name string, isDir bool) bool {
 	n := strings.ToLower(composeHangul(name))
+	nc := ""
 	for _, t := range q.terms {
-		if !strings.Contains(n, t) {
+		if strings.Contains(n, t) {
+			continue
+		}
+		if nc == "" {
+			nc = compactName(n)
+		}
+		if tc := compactName(t); tc == "" || !strings.Contains(nc, tc) {
 			return false
 		}
 	}
@@ -262,6 +285,12 @@ func (c *collector) add(p string, info fs.FileInfo) bool {
 	c.seen[p] = true
 	c.items = append(c.items, makeItem(p, info))
 	return true
+}
+
+func (c *collector) count() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.items)
 }
 
 func (c *collector) markCapped() {
@@ -407,12 +436,20 @@ func spotlightOn(p string) bool {
 func mdQuery(q *query) string {
 	parts := []string{}
 	for _, t := range q.terms {
-		nfd := decomposeHangul(t)
-		if nfd != t {
-			parts = append(parts, `(kMDItemFSName == "*`+t+`*"cd || kMDItemFSName == "*`+nfd+`*"cd)`)
-		} else {
-			parts = append(parts, `kMDItemFSName == "*`+t+`*"cd`)
+		// 같은 조건을 여러 모양으로 물어요: 파일 이름 · 보이는 이름, 완성형(NFC) · 자모가 나뉜 형태(NFD),
+		// 'd'(발음 구별 기호 무시) 있이 · 없이 — 'd' 가 한글 자모를 다르게 다뤄 일부만 맞는 이름을 놓치는 경우가 있어요.
+		forms := []string{t}
+		if nfd := decomposeHangul(t); nfd != t {
+			forms = append(forms, nfd)
 		}
+		ors := []string{}
+		for _, f := range forms {
+			ors = append(ors,
+				`kMDItemFSName == "*`+f+`*"cd`,
+				`kMDItemFSName == "*`+f+`*"c`,
+				`kMDItemDisplayName == "*`+f+`*"cd`)
+		}
+		parts = append(parts, "("+strings.Join(ors, " || ")+")")
 	}
 	if len(q.exts) > 0 {
 		ors := []string{}
@@ -508,10 +545,28 @@ func (a *App) handleSearch(w http.ResponseWriter, r *http.Request) {
 
 	if !folders {
 		if spotlightOn("/") {
-			if n, _ := mdfind(ctx, "/", c); n == 0 {
+			// 이름으로 찾을 때는 Spotlight 와 함께 홈 폴더도 잠깐 직접 훑어요 (Spotlight 가 놓친 파일 채우기)
+			var wg sync.WaitGroup
+			var backup int
+			if len(q.terms) > 0 && q.home != "" {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					defer recoverLog("search backup walk")
+					before := c.count()
+					walk(ctx, q.home, c, start.Add(backupWalkBudget))
+					backup = c.count() - before
+				}()
+			}
+			n, _ := mdfind(ctx, "/", c)
+			wg.Wait()
+			if n == 0 && backup == 0 {
 				note("spotlight", "Spotlight 에서 찾지 못했어요. 외장 디스크나 Spotlight 에서 뺀 폴더는 '선택한 폴더'에 넣어 찾아 보세요")
 			} else {
 				note("spotlight", "")
+				if backup > 0 {
+					note("walk", "")
+				}
 			}
 		} else {
 			home := q.home
@@ -530,6 +585,11 @@ func (a *App) handleSearch(w http.ResponseWriter, r *http.Request) {
 				if spotlightOn(root) {
 					if n, err := mdfind(ctx, root, c); err == nil && n > 0 {
 						note("spotlight", "")
+						// Spotlight 가 놓친 파일이 있을 수 있어 잠깐 직접 훑어 채워요
+						if len(q.terms) > 0 {
+							walk(ctx, root, c, time.Now().Add(backupWalkBudget))
+							note("walk", "")
+						}
 						return
 					}
 				}
