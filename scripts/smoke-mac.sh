@@ -24,7 +24,8 @@ wait_ready() { for _ in $(seq 1 80); do [ -s "$SUP/port" ] && ping_ok && return 
 wait_gone() { for _ in $(seq 1 30); do [ -z "$(app_pid)" ] && [ -z "$(pgrep -x finderoad-engine)" ] && return 0; sleep 0.5; done; return 1; }
 snap() { { echo "--- $1"; ps -axo pid,ppid,stat,comm | grep -E "FINDEROAD|finderoad-engine" | grep -v grep; } >> "$OUT/procs.txt"; }
 launch() { rm -f "$SUP/port"; open "$@" "$APPDIR"; wait_ready; }
-quit_app() { osascript -e 'tell application "FINDEROAD" to quit' >/dev/null 2>&1; wait_gone; }
+# 끄라는 신호가 바쁜 순간에 묻히는 일이 있어 한 번 더 보내요 (그래도 안 꺼지면 실패)
+quit_app() { osascript -e 'tell application "FINDEROAD" to quit' >/dev/null 2>&1; wait_gone && return 0; osascript -e 'tell application "FINDEROAD" to quit' >/dev/null 2>&1; wait_gone; }
 js() { python3 -c "import json,sys; d=json.load(sys.stdin); print($1)"; }
 eng_pid() { get /api/ping | js "d['pid']"; }
 
@@ -149,6 +150,7 @@ check "F2 앱은 그대로" test "$(app_pid)" = "$APID"
 check "F3 새 엔진도 앱의 자식" test "$(get /api/ping | js "d['ppid']")" = "$APID"
 
 echo "▶ G. 앱 종료(⌘Q) → 엔진까지 모두 꺼짐"
+sleep 2 # 다시 켜진 엔진이 자리 잡을 때까지
 check "G1 앱 · 엔진 모두 꺼짐" quit_app
 snap "G 종료 뒤"
 
