@@ -187,6 +187,15 @@ func TestPartialHangulMatch(t *testing.T) {
 			}
 		}
 	}
+	// 같은 파일이 NFC · NFD 두 모양으로 들어와도 한 번만
+	root0 := t.TempDir()
+	mk(t, root0, file)
+	c0 := newCollector(newQuery(SearchReq{Name: "호랑이"}))
+	c0.add(filepath.Join(root0, file), nil)
+	c0.add(decomposeHangul(filepath.Join(root0, file)), nil)
+	if len(c0.items) != 1 {
+		t.Fatalf("dup: %d items", len(c0.items))
+	}
 	// 직접 훑기로도 찾는지
 	root := t.TempDir()
 	mk(t, root, decomposeHangul(file), "다른 파일.jpg")

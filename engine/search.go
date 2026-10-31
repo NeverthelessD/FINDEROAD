@@ -262,9 +262,11 @@ func newCollector(q *query) *collector { return &collector{q: q, seen: map[strin
 
 // add: 결과 하나를 넣어요. 더 받을 수 없으면 false.
 func (c *collector) add(p string, info fs.FileInfo) bool {
+	// Spotlight 와 직접 훑기가 같은 파일을 한글 모양(NFC/NFD)만 다르게 돌려줄 수 있어서 합친 모양으로 비교해요
+	key := composeHangul(p)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.seen[p] {
+	if c.seen[key] {
 		return true
 	}
 	if len(c.items) >= collectCap {
@@ -282,7 +284,7 @@ func (c *collector) add(p string, info fs.FileInfo) bool {
 			return true
 		}
 	}
-	c.seen[p] = true
+	c.seen[key] = true
 	c.items = append(c.items, makeItem(p, info))
 	return true
 }
