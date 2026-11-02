@@ -52,8 +52,12 @@ printf '{"appearance":"light","autoUpdate":false,"scope":"folders","folders":["%
 mdutil -s / > "$OUT/spotlight.txt" 2>&1
 
 echo "▶ A. 켜기 · 자체 시험(Quick Look · 휴지통 · 클립보드 · 위쪽 막대 · 단축키)"
+# 예전 "backup" 폴더의 이전 버전 → 앱이 켜지면 Spotlight 가 안 찾는 backup.noindex 로 옮겨야 해요
+rm -rf "$SUP/backup" "$SUP/backup.noindex"; mkdir -p "$SUP/backup"; ditto "$APPDIR" "$SUP/backup/FINDEROAD.app"
+printf '1.0.0' > "$SUP/backup/FINDEROAD.app/Contents/Resources/version.txt"
 launch --env FINDEROAD_SELFTEST=1
 check "A1 앱을 열면 엔진이 준비됨" ping_ok
+check "A1b 이전 버전 보관본을 Spotlight 가 안 찾는 폴더(backup.noindex)로 옮김" bash -c "test -d '$SUP/backup.noindex/FINDEROAD.app' && test ! -e '$SUP/backup'"
 check "A2 엔진이 Dock 앱 방식으로 켜짐(shell=native)" bash -c "curl -fs -H 'x-token: $(tok)' http://127.0.0.1:$(port)/api/ping | grep -q '\"shell\":\"native\"'"
 APID=$(app_pid); EPPID=$(get /api/ping | js "d['ppid']"); EPID=$(eng_pid)
 check "A3 엔진이 FINDEROAD 앱의 자식 (앱 $APID · 엔진 $EPID 의 부모 $EPPID)" test -n "$APID" -a "$EPPID" = "$APID"
@@ -204,7 +208,7 @@ post /api/update/restart '{}' >/dev/null
 sleep 3
 check "J2 새 버전이 다시 열림" wait_ready
 check "J3 응용 프로그램 폴더의 앱이 9.9.9 ($(cat "$APPDIR/Contents/Resources/version.txt"))" test "$(cat "$APPDIR/Contents/Resources/version.txt")" = "9.9.9"
-check "J4 이전 버전은 백업에 보관" test -f "$SUP/backup/FINDEROAD.app/Contents/Resources/version.txt"
+check "J4 이전 버전은 백업에 보관" test -f "$SUP/backup.noindex/FINDEROAD.app/Contents/Resources/version.txt"
 check "J5 업데이트한 앱의 서명이 그대로" codesign --verify --deep --strict "$APPDIR"
 quit_app
 kill "$HTTP" 2>/dev/null

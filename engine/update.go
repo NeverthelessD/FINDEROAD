@@ -49,7 +49,50 @@ type Updater struct {
 	installed string // 설치해 두고 다시 시작을 기다리는 버전
 }
 
-func NewUpdater(support string) *Updater { return &Updater{support: support, status: "idle"} }
+func NewUpdater(support string) *Updater {
+	u := &Updater{support: support, status: "idle"}
+	u.migrateBackup()
+	return u
+}
+
+// backupDir: 이전 버전을 보관하는 폴더.
+// 이름 끝의 ".noindex" 는 macOS 에게 '이 폴더는 Spotlight 로 찾지 마세요'라는 표시예요 (1.0.2).
+// 예전에는 "backup" 폴더라서 Spotlight 에 같은 이름의 앱이 두 개 보였어요.
+func (u *Updater) backupDir() string { return filepath.Join(u.support, "backup.noindex") }
+
+// migrateBackup moves an old "backup/<app>.app" into "backup.noindex" and tells macOS to forget the old copy.
+func (u *Updater) migrateBackup() {
+	if runtime.GOOS == "windows" {
+		return
+	}
+	old := filepath.Join(u.support, "backup", "FINDEROAD.app")
+	if !fileExists(old) {
+		return
+	}
+	dst := filepath.Join(u.backupDir(), "FINDEROAD.app")
+	os.MkdirAll(filepath.Dir(dst), 0o755)
+	unregisterApp(old)
+	if fileExists(dst) {
+		os.RemoveAll(old)
+	} else if err := moveDir(old, dst); err != nil {
+		log.Printf("backup migrate: %v", err)
+		return
+	}
+	os.Remove(filepath.Join(u.support, "backup"))
+	unregisterApp(dst)
+	log.Printf("이전 버전 보관 폴더를 Spotlight 에서 숨겼어요 (%s)", dst)
+}
+
+// unregisterApp asks LaunchServices to forget an app bundle (Spotlight · '다음으로 열기' 목록에서 빠져요). 실패해도 괜찮아요.
+func unregisterApp(p string) {
+	if runtime.GOOS != "darwin" {
+		return
+	}
+	const ls = "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"
+	if fileExists(ls) {
+		exec.Command(ls, "-u", p).Run()
+	}
+}
 
 func updateURL() string {
 	if u := env("UPDATE_URL"); u != "" {
@@ -282,12 +325,16 @@ func (u *Updater) install(rel *Release) error {
 
 // swap: 지금 앱을 backup 폴더로 옮기고 새 앱을 그 자리에 놓아요 (실패하면 되돌려요)
 func (u *Updater) swap(appPath, newApp string) error {
-	backup := filepath.Join(u.support, "backup", "FINDEROAD.app")
+	backup := filepath.Join(u.backupDir(), "FINDEROAD.app")
 	os.MkdirAll(filepath.Dir(backup), 0o755)
 	os.RemoveAll(backup)
 	if err := moveDir(appPath, backup); err != nil {
 		if os.IsPermission(err) || errors.Is(err, os.ErrPermission) {
-			return adminSwap(appPath, newApp, backup)
+			if err := adminSwap(appPath, newApp, backup); err != nil {
+				return err
+			}
+			unregisterApp(backup)
+			return nil
 		}
 		return fmt.Errorf("지금 앱을 옮기지 못했어요: %v", err)
 	}
@@ -295,6 +342,7 @@ func (u *Updater) swap(appPath, newApp string) error {
 		moveDir(backup, appPath)
 		return fmt.Errorf("새 버전을 설치하지 못했어요: %v", err)
 	}
+	unregisterApp(backup)
 	if runtime.GOOS == "darwin" {
 		exec.Command("/usr/bin/xattr", "-cr", appPath).Run()
 		exec.Command("/usr/bin/touch", appPath).Run()
