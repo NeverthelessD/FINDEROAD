@@ -305,7 +305,7 @@ func newCollector(q *query) *collector { return &collector{q: q, seen: map[strin
 // add: 결과 하나를 넣어요. 더 받을 수 없으면 false.
 func (c *collector) add(p string, info fs.FileInfo) bool {
 	// Spotlight 와 직접 훑기가 같은 파일을 한글 모양(NFC/NFD)만 다르게 돌려줄 수 있어서 합친 모양으로 비교해요
-	key := composeHangul(p)
+	key := dedupeKey(p)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.seen[key] {
@@ -332,6 +332,17 @@ func (c *collector) add(p string, info fs.FileInfo) bool {
 	c.items = append(c.items, it)
 	c.version++
 	return true
+}
+
+// dedupeKey: 같은 파일을 다른 모양의 경로로 받아도 하나로 봐요 (한글 NFC/NFD, macOS 의 /var = /private/var)
+func dedupeKey(p string) string {
+	for _, pre := range []string{"/private/var/", "/private/tmp/", "/private/etc/"} {
+		if strings.HasPrefix(p, pre) {
+			p = p[len("/private"):]
+			break
+		}
+	}
+	return composeHangul(p)
 }
 
 func (c *collector) count() int {
@@ -491,12 +502,20 @@ func mdfind(ctx context.Context, root string, c *collector) (int, error) {
 	if err := cmd.Start(); err != nil {
 		return 0, err
 	}
+	// Spotlight 는 실제 경로(/private/var/…)로 답해요. 고른 폴더가 바로 가기(/var/…)를 거치면 고른 모양으로 되돌려요
+	realRoot := root
+	if rr, err := filepath.EvalSymlinks(root); err == nil {
+		realRoot = rr
+	}
 	br := bufio.NewReaderSize(out, 256<<10)
 	found := 0
 	for {
 		p, err := br.ReadString(0)
 		if len(p) > 1 {
 			p = strings.TrimSuffix(p, "\x00")
+			if realRoot != root && strings.HasPrefix(p, realRoot+"/") {
+				p = root + p[len(realRoot):]
+			}
 			if !c.q.skipRel(root, p) && c.q.nameMatches(filepath.Base(p), false) {
 				if !c.add(p, nil) {
 					cmd.Process.Kill()

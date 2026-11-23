@@ -370,3 +370,12 @@ func TestSearchJobStream(t *testing.T) {
 		t.Error("조건 없이 Mac 전체는 안내")
 	}
 }
+
+func TestDedupeKey(t *testing.T) {
+	if dedupeKey("/private/var/x/a.txt") != dedupeKey("/var/x/a.txt") {
+		t.Fatal("/private/var")
+	}
+	if dedupeKey(decomposeHangul("/Users/a/한글.txt")) != dedupeKey("/Users/a/한글.txt") {
+		t.Fatal("nfd")
+	}
+}
