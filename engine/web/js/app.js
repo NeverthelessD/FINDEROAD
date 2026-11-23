@@ -450,11 +450,11 @@ function commitExtInput() {
   renderExts();
   return true;
 }
-const narrowMQ = window.matchMedia('(max-width: 1240px)');
-narrowMQ.addEventListener('change', () => renderExts());
+let extRoomW = 0;
+window.addEventListener('resize', () => { const r = innerWidth >= 1500 ? 3 : innerWidth > 1240 ? 2 : 1; if (r !== extRoomW) renderExts(); });
 function renderExts() {
   // 칸이 좁으면 앞의 몇 개만 보여 주고 나머지는 '+개수'로 (마우스를 올리면 모두 보여요)
-  const room = narrowMQ.matches ? 1 : 3;
+  const room = extRoomW = innerWidth >= 1500 ? 3 : innerWidth > 1240 ? 2 : 1;
   const max = S.exts.length > room + 1 ? room : room + 1;
   const shown = S.exts.slice(0, max);
   $('#extToks').innerHTML = shown.map((x) => `<span class="tok">${esc(x)}<button type="button" data-rmext="${esc(x)}" aria-label="${esc(x)} 빼기" tabindex="-1">${ICON_X.replace('width="12" height="12"', 'width="9" height="9"')}</button></span>`).join('') +
