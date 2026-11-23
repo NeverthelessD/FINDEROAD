@@ -40,6 +40,7 @@ type Settings struct {
 	AutoUpdate bool           `json:"autoUpdate"`
 	Scope      string         `json:"scope"`   // all | folders
 	Folders    []string       `json:"folders"` // 선택한 폴더들
+	Dests      []string       `json:"dests"`   // 보낼 곳 (결과를 끌어다 놓는 폴더)
 	ShowHidden bool           `json:"showHidden"`
 	UI         map[string]any `json:"ui"`
 }
@@ -206,6 +207,7 @@ func (a *App) Settings() Settings {
 	defer a.mu.Unlock()
 	s := a.settings
 	s.Folders = append([]string(nil), a.settings.Folders...)
+	s.Dests = append([]string(nil), a.settings.Dests...)
 	s.UI = make(map[string]any, len(a.settings.UI))
 	for k, v := range a.settings.UI {
 		s.UI[k] = v
@@ -220,7 +222,12 @@ func (a *App) settingsJSON() map[string]any {
 	for _, f := range s.Folders {
 		folders = append(folders, map[string]any{"path": f, "name": composeHangul(filepath.Base(f)), "display": displayPath(f), "exists": dirExists(f)})
 	}
+	dests := []map[string]any{}
+	for _, f := range s.Dests {
+		dests = append(dests, map[string]any{"path": f, "name": composeHangul(filepath.Base(f)), "display": displayPath(f), "exists": dirExists(f), "volume": strings.HasPrefix(f, "/Volumes/")})
+	}
 	return map[string]any{
+		"dests":      dests,
 		"appearance": s.Appearance,
 		"autoUpdate": s.AutoUpdate,
 		"scope":      s.Scope,
@@ -260,7 +267,7 @@ func (a *App) handleSettings(w http.ResponseWriter, r *http.Request) {
 				if s == "all" || s == "folders" {
 					a.settings.Scope = s
 				}
-			case "folders":
+			case "folders", "dests":
 				var fs []string
 				if json.Unmarshal(v, &fs) == nil {
 					out := []string{}
@@ -272,7 +279,11 @@ func (a *App) handleSettings(w http.ResponseWriter, r *http.Request) {
 							out = append(out, f)
 						}
 					}
-					a.settings.Folders = out
+					if k == "dests" {
+						a.settings.Dests = out
+					} else {
+						a.settings.Folders = out
+					}
 				}
 			case "ui":
 				var ui map[string]any
@@ -368,6 +379,18 @@ func (a *App) routes() http.Handler {
 	})
 	api("/api/settings", a.handleSettings)
 
+	api("/api/exists", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Paths []string `json:"paths"`
+		}
+		readJSON(r, &in)
+		out := make([]bool, len(in.Paths))
+		for i, p := range in.Paths {
+			_, err := os.Lstat(p)
+			out[i] = err == nil
+		}
+		writeJSON(w, map[string]any{"ok": true, "exists": out})
+	})
 	api("/api/search", a.handleSearch)
 	api("/api/search/start", a.handleSearchStart)
 	api("/api/search/poll", a.handleSearchPoll)

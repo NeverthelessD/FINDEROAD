@@ -51,7 +51,7 @@ w(os.path.join(t, "영상", "깊은", "폴더", unicodedata.normalize("NFD", "�
 PY
 cp "$ROOT/app/AppIcon.png" "$T/사진/아이콘.png"
 mkdir -p "$SUP"
-printf '{"appearance":"light","autoUpdate":false,"scope":"folders","folders":["%s"],"showHidden":false,"ui":{}}' "$T" > "$SUP/settings.json"
+printf '{"appearance":"light","autoUpdate":false,"scope":"folders","folders":["%s"],"dests":["%s"],"showHidden":false,"ui":{}}' "$T" "$D" > "$SUP/settings.json"
 mdutil -s / > "$OUT/spotlight.txt" 2>&1
 
 echo "▶ A. 켜기 · 자체 시험(Quick Look · 휴지통 · 클립보드 · 위쪽 막대 · 단축키)"
@@ -80,6 +80,32 @@ check "S7 창 끌기 영역이 깔림 ($(stj "d.get('dragViews')")개)" bash -c 
 check "S8 동영상 분류 버튼으로 찾은 결과가 화면에 나옴 ($(stj "d.get('videoRows')")줄)" bash -c "[ \"$(stj "d.get('videoRows', 0)")\" -ge 3 ]"
 sleep 1
 screencapture -x "$OUT/shot-screen.png"
+
+echo "▶ N. 결과를 끌어서 '보낼 곳'에 놓기 (⌥ = 복사)"
+DF=$(stj "' '.join(map(str, (d.get('drag_from') or []) + (d.get('drag_to') or [])))")
+VIDS="드론.mp4 제주여행_브이로그.mp4 회의녹화.MOV"
+if [ "$(echo "$DF" | wc -w | tr -d ' ')" = "4" ]; then
+  osascript -e 'tell application "FINDEROAD" to activate' >/dev/null 2>&1; sleep 1
+  DROP=$(swift "$ROOT/scripts/drag-file-test.swift" $DF 2>&1 | tail -1)
+  GOT=""; for _ in $(seq 1 20); do GOT=$(python3 -c "import os,sys,unicodedata as u;print(' '.join(sorted(u.normalize('NFC',f) for f in os.listdir(sys.argv[1]) if f.lower().endswith(('.mp4','.mov')))))" "$D"); [ -n "$GOT" ] && break; sleep 0.5; done
+  screencapture -x "$OUT/shot-dragdrop.png"
+  tail -5 "$SUP/launcher.log" > "$OUT/drag-file-log.txt"
+  if [ -n "$GOT" ]; then
+    LEFT=$(python3 -c "import os,sys;print(sum(1 for r,d,f in os.walk(sys.argv[1]) for x in f if x.lower().endswith(('.mp4','.mov')) and not x.startswith('.')))" "$T")
+    if [ "$LEFT" = "3" ]; then pass "N1 끌어서 보낼 곳에 놓으면 복사됨 (⌥ · $GOT)"
+    else
+      pass "N1 끌어서 보낼 곳에 놓으면 옮겨짐 ($GOT · ⌥ 는 빌드 서버가 전달하지 않음)"
+      for f in "$D"/*.mp4 "$D"/*.MOV; do [ -e "$f" ] || continue; B=$(basename "$f"); case "$B" in 드론*) mv "$f" "$T/영상/깊은/폴더/";; *) mv "$f" "$T/영상/";; esac; done
+    fi
+    rm -f "$D"/*.mp4 "$D"/*.MOV
+  elif grep -q "결과 끌기 시작" "$SUP/launcher.log"; then
+    fail "N1 끌기는 시작했지만 보낼 곳에 놓이지 않음 ($DROP · $(tr '\n' ' ' < "$OUT/drag-file-log.txt"))"
+  else
+    echo "INFO  N1 끌기를 확인하지 못함 ($DROP) — 빌드 서버가 마우스 흉내를 막았을 수 있어요" | tee -a "$RES"
+  fi
+else
+  fail "N1 끌기 시험 위치를 못 받음 ($DF)"
+fi
 cp "$SUP/shot-light.png" "$OUT/" 2>/dev/null; cp "$SUP/shot-dark.png" "$OUT/" 2>/dev/null
 
 echo "▶ B. 검색"

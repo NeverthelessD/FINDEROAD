@@ -245,10 +245,20 @@ final class DragView: NSView {
     }
 }
 
-/// Finder 에서 폴더를 끌어다 놓으면 검색 범위에 넣어요
-final class FRWebView: WKWebView {
-    var onFolders: (([String]) -> Void)?
+/// Finder 에서 폴더를 끌어다 놓으면 검색 범위(또는 '보낼 곳')에 넣어요.
+/// 검색 결과를 끌면 진짜 파일 끌기를 시작해요: Finder · 데스크탑 · 다른 앱에 놓을 수 있고, 이 창의 '보낼 곳'에 놓으면 그리로 옮겨요.
+final class FRWebView: WKWebView, NSDraggingSource {
+    var onFolders: (([String], NSPoint) -> Void)?
     var onDragging: ((Bool) -> Void)?
+    /// 이 앱의 결과를 끌고 있을 때: (화면 좌표, 복사?, 답) — 놓을 수 있는 곳인지 화면에 물어요
+    var onInternalOver: ((NSPoint, Bool, @escaping (Bool) -> Void) -> Void)?
+    var onInternalLeave: (() -> Void)?
+    var onInternalDrop: ((NSPoint, Bool, [String]) -> Void)?
+    var onDragEnded: ((String, [String]) -> Void)?
+    var lastMouse: NSEvent?
+    private var dragPaths: [String] = []
+    private var overOK = false
+    private var droppedInside = false
 
     private func folderPaths(_ info: NSDraggingInfo) -> [String] {
         let urls = (info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL]) ?? []
@@ -258,26 +268,95 @@ final class FRWebView: WKWebView {
         }
     }
 
+    /// 창 안의 위치 → 화면(웹) 좌표 (왼쪽 위가 0,0)
+    func pagePoint(_ windowPoint: NSPoint) -> NSPoint {
+        let p = convert(windowPoint, from: nil)
+        return NSPoint(x: p.x, y: isFlipped ? p.y : bounds.height - p.y)
+    }
+
+    private func isOurs(_ info: NSDraggingInfo) -> Bool { (info.draggingSource as AnyObject?) === self }
+    private var copyKey: Bool { NSEvent.modifierFlags.contains(.option) }
+
+    private func internalOver(_ sender: NSDraggingInfo) -> NSDragOperation {
+        let copy = copyKey
+        onInternalOver?(pagePoint(sender.draggingLocation), copy) { [weak self] ok in self?.overOK = ok }
+        return overOK ? (copy ? .copy : .move) : []
+    }
+
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        if isOurs(sender) { overOK = false; return internalOver(sender) }
         if !folderPaths(sender).isEmpty { onDragging?(true); return .copy }
         return super.draggingEntered(sender)
     }
 
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        if isOurs(sender) { return internalOver(sender) }
         if !folderPaths(sender).isEmpty { return .copy }
         return super.draggingUpdated(sender)
     }
 
     override func draggingExited(_ sender: NSDraggingInfo?) {
+        if let s = sender, isOurs(s) { overOK = false; onInternalLeave?(); return }
         onDragging?(false)
         super.draggingExited(sender)
     }
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        if isOurs(sender) {
+            guard overOK else { onInternalLeave?(); return false }
+            droppedInside = true
+            let copy = copyKey
+            Log.write("결과를 앱 안에 놓음 \(dragPaths.count)개 · \(copy ? "복사" : "이동")")
+            onInternalDrop?(pagePoint(sender.draggingLocation), copy, dragPaths)
+            return true
+        }
         let dirs = folderPaths(sender)
         onDragging?(false)
-        if !dirs.isEmpty { onFolders?(dirs); return true }
+        if !dirs.isEmpty { onFolders?(dirs, pagePoint(sender.draggingLocation)); return true }
         return super.performDragOperation(sender)
+    }
+
+    /// 화면이 '끌기 시작'을 알려 오면 진짜 파일 끌기를 시작해요. 문제가 있으면 이유를 돌려줘요.
+    func startFileDrag(_ paths: [String]) -> String? {
+        guard let ev = lastMouse, ev.type == .leftMouseDragged || ev.type == .leftMouseDown else { return "no mouse event" }
+        guard NSEvent.pressedMouseButtons & 1 == 1 else { return "mouse is up" }
+        let urls = paths.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) }
+        guard !urls.isEmpty else { return "no files" }
+        let p = convert(ev.locationInWindow, from: nil)
+        var items: [NSDraggingItem] = []
+        for (i, u) in urls.enumerated() {
+            let item = NSDraggingItem(pasteboardWriter: u as NSURL)
+            let icon = NSWorkspace.shared.icon(forFile: u.path)
+            icon.size = NSSize(width: 48, height: 48)
+            let off = CGFloat(min(i, 4)) * 4
+            item.setDraggingFrame(NSRect(x: p.x - 24 + off, y: p.y - 24 + (isFlipped ? off : -off), width: 48, height: 48), contents: icon)
+            items.append(item)
+        }
+        dragPaths = urls.map { $0.path }
+        droppedInside = false
+        overOK = false
+        let session = beginDraggingSession(with: items, event: ev, source: self)
+        session.animatesToStartingPositionsOnCancelOrFail = true
+        session.draggingFormation = .pile
+        Log.write("결과 끌기 시작 \(urls.count)개")
+        return nil
+    }
+
+    func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
+        context == .outsideApplication ? [.copy, .move, .generic] : [.copy, .move]
+    }
+
+    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        let op: String
+        if droppedInside { op = "inside" }
+        else if operation.isEmpty { op = "none" }
+        else if operation.contains(.delete) { op = "delete" }
+        else if operation.contains(.copy) && !operation.contains(.move) { op = "copy" }
+        else { op = "move" } // Finder 가 같은 디스크에서 옮김(.move / .generic) — 화면이 파일이 아직 있는지 확인해요
+        Log.write("결과 끌기 끝: \(op)")
+        onDragEnded?(op, dragPaths)
+        dragPaths = []
+        droppedInside = false
     }
 }
 
@@ -412,7 +491,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         web.allowsMagnification = false
         web.autoresizingMask = [.width, .height]
         if #available(macOS 13.3, *) { web.isInspectable = true }
-        web.onFolders = { [weak self] paths in self?.js("window.FR && FR.drop(\(jsonString(paths)))") }
+        web.onFolders = { [weak self] paths, pt in self?.js("window.FR && FR.drop(\(jsonString(paths)), \(Int(pt.x)), \(Int(pt.y)))") }
+        web.onInternalOver = { [weak self] pt, copy, answer in
+            self?.evalJS("window.FR ? FR.dragOver(\(Int(pt.x)), \(Int(pt.y)), \(copy)) : false") { v in answer((v as? Bool) ?? ((v as? NSNumber)?.boolValue ?? false)) }
+        }
+        web.onInternalLeave = { [weak self] in self?.js("window.FR && FR.dragLeave()") }
+        web.onInternalDrop = { [weak self] pt, copy, paths in self?.js("window.FR && FR.dragDrop(\(Int(pt.x)), \(Int(pt.y)), \(copy), \(jsonString(paths)))") }
+        web.onDragEnded = { [weak self] op, paths in self?.js("window.FR && FR.dragEnded('\(op)', \(jsonString(paths)))") }
+        // 끌기를 시작할 때 쓸 마우스 움직임을 기억해요 (화면이 '끌기 시작'을 알려 올 때는 이미 지나간 뒤라서)
+        NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged]) { [weak self] e in
+            if let w = self?.web, e.window === w.window { w.lastMouse = e }
+            return e
+        }
         web.onDragging = { [weak self] on in self?.js("window.FR && FR.dragging(\(on))") }
 
         window = MainWindow(contentRect: NSRect(x: 0, y: 0, width: 1320, height: 860),
@@ -589,6 +679,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             }
             Log.write("휴지통으로 \(items.count)개" + (errors.isEmpty ? "" : " · 실패 \(errors.count)개"))
             replyHandler(["ok": errors.isEmpty, "items": items, "errors": errors], nil)
+
+        case "dragFiles":
+            if let err = web.startFileDrag(paths) { replyHandler(["ok": false, "error": err], nil) }
+            else { replyHandler(["ok": true], nil) }
 
         case "pbWriteFiles":
             let pb = NSPasteboard.general
@@ -796,6 +890,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         after(2.5) {
             self.evalJS("document.querySelectorAll('#tbody .row').length") { v in
                 r["videoRows"] = (v as? NSNumber)?.intValue ?? -1
+                // 끌어서 옮기기 시험용: 첫 줄 · 첫 '보낼 곳'의 화면 위치 (맥 화면 좌표, 왼쪽 위 기준)
+                self.evalJS("(()=>{const c=(el)=>{if(!el)return null;const b=el.getBoundingClientRect();return [b.left+Math.min(b.width/2,120),b.top+b.height/2]};return JSON.stringify({from:c(document.querySelector('#tbody .row')),to:c(document.querySelector('[data-dest]'))})})()") { v in
+                    if let str = v as? String, let d = str.data(using: .utf8), let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
+                        let primaryH = NSScreen.screens.first?.frame.height ?? 0
+                        for key in ["from", "to"] {
+                            guard let a = o[key] as? [NSNumber], a.count == 2 else { continue }
+                            let vp = NSPoint(x: a[0].doubleValue, y: self.web.isFlipped ? a[1].doubleValue : Double(self.web.bounds.height) - a[1].doubleValue)
+                            let wp = self.web.convert(vp, to: nil)
+                            let sp = self.window.convertPoint(toScreen: wp)
+                            r["drag_" + key] = [Int(sp.x), Int(primaryH - sp.y)]
+                        }
+                    }
+                }
                 self.snapshot("shot-light.png") {
                     // 5) 위쪽 막대의 버튼이 눌리는지 (신호등 · 끌기 영역이 가로막지 않는지) → 다크 화면 저장
                     self.evalJS("(()=>{const b=document.querySelector('[data-theme-pick=\"dark\"]').getBoundingClientRect();return [b.left+b.width/2,b.top+b.height/2]})()") { v in

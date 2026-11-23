@@ -31,7 +31,7 @@ const S = {
   appearance: 'system', scope: 'all', folders: [], hidden: false, autoUpdate: true, home: '', build: '',
   items: [], total: 0, capped: false, method: '', ms: 0, notes: [], searched: false, searching: false, error: '',
   sel: new Set(), anchor: null, cursor: null, sort: { key: 'mtime', dir: -1 }, sortUser: false, undo: null, update: null,
-  partial: false, dirs: 0, cur: '', hist: [], curQ: null, curLive: false,
+  partial: false, dirs: 0, cur: '', hist: [], curQ: null, curLive: false, exts: [], dests: [], spot: false,
 };
 
 // ---------------------------------------------------------------- 엔진 · 앱 연결
@@ -151,10 +151,11 @@ const ICON_FOLDER = '<svg aria-hidden="true" viewBox="0 0 16 16" class="ic"><pat
 const ICON_X = '<svg aria-hidden="true" width="12" height="12" viewBox="0 0 16 16" class="ic" style="stroke-width:1.7"><path d="M4 4l8 8M12 4l-8 8"/></svg>';
 const ICON_MUSIC = '<svg aria-hidden="true" viewBox="0 0 16 16" class="ic"><path d="M6 12.5V3.5l7-1.5v9"/><circle cx="4.5" cy="12.5" r="1.5"/><circle cx="11.5" cy="11" r="1.5"/></svg>';
 
+const KIND_CLASS = { doc: 'k-doc', video: 'k-video', image: 'k-image', audio: 'k-audio', archive: 'k-archive', code: 'k-code', app: 'k-code' };
 function tileHTML(it) {
   if (it.isDir && it.kind === 'folder') return `<span class="tile">${ICON_FOLDER}</span>`;
   const e = (it.ext || '?').toUpperCase();
-  return `<span class="tile">${esc(e.length > 5 ? e.slice(0, 4) : e)}</span>`;
+  return `<span class="tile ${KIND_CLASS[it.kind] || ''}">${esc(e.length > 5 ? e.slice(0, 4) : e)}</span>`;
 }
 
 // ---------------------------------------------------------------- 알림 · 상태 표시줄
@@ -262,7 +263,7 @@ function addFolderPaths(paths) {
   renderScope();
   saveSettings({ folders: S.folders.map((f) => f.path), scope: 'folders' });
   setStatus(added === 1 ? `‘${basename(paths[paths.length - 1])}’ 폴더를 추가했어요` : `폴더 ${added}개를 추가했어요`);
-  if (S.searched || qName.value.trim() || qExt.value.trim()) runSearch();
+  if (S.searched || qName.value.trim() || extAll().length) runSearch();
 }
 
 async function chooseFolders({ prompt, button, multiple }) {
@@ -285,9 +286,144 @@ async function addFolders() {
   else if (S.scope === 'folders' && !S.folders.length) setStatus('검색할 폴더를 추가해 주세요');
 }
 
+// ---------------------------------------------------------------- 보낼 곳 (결과를 끌어다 놓는 폴더)
+
+const ICON_DEST = '<svg aria-hidden="true" viewBox="0 0 16 16" class="ic"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h2.6l1.4 1.5h5A1.5 1.5 0 0 1 14 6v5.5A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5z"/><path d="M6 8.5h4M8.5 7l1.5 1.5L8.5 10"/></svg>';
+const ICON_DISK = '<svg aria-hidden="true" viewBox="0 0 16 16" class="ic"><rect x="2" y="4" width="12" height="8" rx="2"/><path d="M5 9.5h.01M8 9.5h3"/></svg>';
+function renderDests() {
+  $('#dests').innerHTML = S.dests.map((d, i) => `
+    <div class="dest${d.exists === false ? ' missing' : ''}" data-dest="${i}" role="button" tabindex="0" title="${esc(d.path)}${d.exists === false ? ' (찾을 수 없음)' : ''} — 누르면 고른 파일을 여기로 옮기거나 복사해요">
+      <span class="mk">${d.volume ? ICON_DISK : ICON_DEST}</span>
+      <span class="fd-t"><span class="fd-n">${esc(d.name)}</span><span class="fd-p">${esc(d.display || displayPath(d.path))}</span></span>
+      <span class="hotlabel" data-hot="${i}">여기로 이동</span>
+      <button type="button" class="x" data-rmdest="${i}" aria-label="${esc(d.name)} 보낼 곳에서 빼기">${ICON_X}</button>
+    </div>`).join('');
+}
+function saveDests() { saveSettings({ dests: S.dests.map((d) => d.path) }); }
+function addDestPaths(paths) {
+  let added = 0;
+  for (const p of paths) {
+    if (!p || S.dests.some((d) => d.path === p)) continue;
+    S.dests.push({ path: p, name: basename(p) || p, display: displayPath(p), exists: true, volume: p.startsWith('/Volumes/') });
+    added++;
+  }
+  if (!added) { setStatus('이미 보낼 곳에 있어요'); return; }
+  renderDests();
+  saveDests();
+  setStatus(added === 1 ? `‘${basename(paths[paths.length - 1])}’을(를) 보낼 곳에 넣었어요 · 결과를 끌어다 놓으면 옮겨져요` : `보낼 곳 ${added}개를 넣었어요`);
+}
+$('#addDest').addEventListener('click', async () => {
+  const paths = await chooseFolders({ prompt: '결과를 보낼 폴더를 골라 주세요 (여러 개 고를 수 있어요)', button: '보낼 곳에 넣기', multiple: true });
+  if (paths.length) addDestPaths(paths);
+});
+$('#dests').addEventListener('click', (e) => {
+  const rm = e.target.closest('[data-rmdest]');
+  if (rm) {
+    const d = S.dests.splice(+rm.dataset.rmdest, 1)[0];
+    renderDests();
+    saveDests();
+    setStatus(`‘${d.name}’을(를) 보낼 곳에서 뺐어요`);
+    return;
+  }
+  const el = e.target.closest('[data-dest]');
+  if (el) destMenu(+el.dataset.dest, el);
+});
+$('#dests').addEventListener('keydown', (e) => {
+  const el = e.target.closest('[data-dest]');
+  if (el && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); destMenu(+el.dataset.dest, el); }
+});
+let menuActs = null;
+function destMenu(i, el) {
+  const d = S.dests[i];
+  const n = S.sel.size;
+  const r = el.getBoundingClientRect();
+  showMenu(r.right - 6, r.top, [
+    ['move', n ? `고른 ${n}개를 여기로 이동` : '고른 파일이 없어요', '', '', !n],
+    ['copy', n ? `고른 ${n}개를 여기에 복사` : '', '', '', !n],
+    '-', ['reveal', 'Finder에서 열기', ''],
+  ].filter((x) => x === '-' || x[1]), {
+    move: () => sendTo('move', selPaths(), d.path),
+    copy: () => sendTo('copy', selPaths(), d.path),
+    reveal: () => openItems([d.path]),
+  });
+}
+
+// ---------------------------------------------------------------- 결과를 끌어서 옮기기 (맥 앱)
+// 고른 줄을 누른 채 움직이면 맥 앱에 '끌기 시작'을 알려요. 그다음은 macOS 가 해요: Finder · 데스크탑에 놓으면 그쪽 규칙대로
+// (같은 디스크 = 이동, 다른 디스크 = 복사, ⌥ = 복사). 이 창의 '보낼 곳'이나 결과의 폴더 위에 놓으면 이 앱이 옮겨요(⌥ = 복사).
+let dragPress = null;
+$('#tbody').addEventListener('mousedown', (e) => {
+  if (!NATIVE || e.button !== 0 || e.shiftKey || e.metaKey) return;
+  const row = e.target.closest('.row');
+  if (!row) return;
+  dragPress = { x: e.clientX, y: e.clientY, i: +row.dataset.i };
+});
+document.addEventListener('mousemove', (e) => {
+  if (!dragPress || !(e.buttons & 1)) { dragPress = null; return; }
+  if (Math.hypot(e.clientX - dragPress.x, e.clientY - dragPress.y) < 5) return;
+  const it = S.items[dragPress.i];
+  dragPress = null;
+  if (!it) return;
+  if (!S.sel.has(it.path)) { S.sel = new Set([it.path]); S.anchor = S.cursor = S.items.indexOf(it); updateSelectionView(); }
+  const paths = selPaths();
+  native('dragFiles', { paths }).then((r) => { if (r && r.error) clientLog('drag: ' + r.error); });
+});
+document.addEventListener('mouseup', () => { dragPress = null; });
+
+function dropTargetAt(x, y) {
+  const el = document.elementFromPoint(x, y);
+  if (!el) return null;
+  const d = el.closest('[data-dest]');
+  if (d) { const dd = S.dests[+d.dataset.dest]; return dd && dd.exists !== false ? { el: d, path: dd.path, name: dd.name } : null; }
+  const row = el.closest('.row');
+  if (row) {
+    const it = S.items[+row.dataset.i];
+    if (it && it.isDir && it.kind === 'folder' && !S.sel.has(it.path)) return { el: row, path: it.path, name: it.name };
+  }
+  return null;
+}
+let hotEl = null;
+function setHot(t, copy) {
+  if (hotEl && (!t || hotEl !== t.el)) hotEl.classList.remove('hot', 'drop');
+  hotEl = t ? t.el : null;
+  if (!t) return;
+  t.el.classList.add(t.el.classList.contains('row') ? 'drop' : 'hot');
+  const lab = t.el.querySelector('.hotlabel');
+  if (lab) lab.textContent = copy ? '여기에 복사' : '여기로 이동';
+}
 // 맥 앱이 알려 줘요: Finder 에서 폴더를 끌어다 놓음 · 전체 화면
 window.FR = {
-  drop(paths) { if (paths && paths.length) addFolderPaths(paths); },
+  // Finder 에서 폴더를 끌어다 놓음: '보낼 곳' 위면 보낼 곳에, 아니면 검색할 폴더에 넣어요
+  drop(paths, x, y) {
+    if (!paths || !paths.length) return;
+    const el = x != null ? document.elementFromPoint(x, y) : null;
+    if (el && el.closest('#dests, #addDest, .label-row')) addDestPaths(paths); else addFolderPaths(paths);
+  },
+  // 이 앱의 결과를 끌고 있음: 놓을 수 있는 곳이면 true
+  dragOver(x, y, copy) { const t = dropTargetAt(x, y); setHot(t, copy); return !!t; },
+  dragLeave() { setHot(null); },
+  dragDrop(x, y, copy, paths) {
+    const t = dropTargetAt(x, y);
+    setHot(null);
+    if (!t) return false;
+    sendTo(copy ? 'copy' : 'move', paths || selPaths(), t.path);
+    return true;
+  },
+  // 끌기가 끝남 (Finder 등 다른 곳에 놓았으면 옮겨졌을 수 있어 확인해요)
+  async dragEnded(op, paths) {
+    setHot(null);
+    if (op !== 'move' && op !== 'delete') return;
+    try {
+      const r = await api('/api/exists', { paths });
+      const gone = new Set(paths.filter((p, i) => !r.exists[i]));
+      if (!gone.size) return;
+      S.items = S.items.filter((i) => !gone.has(i.path));
+      for (const p of gone) S.sel.delete(p);
+      S.total = Math.max(0, S.total - gone.size);
+      fixCursor(); renderTable(); renderPreview(); renderToolbar();
+      setStatus(`${gone.size}개를 다른 곳으로 옮겼어요`);
+    } catch { /* 다음 검색 때 맞춰져요 */ }
+  },
   dragging(on) { document.body.classList.toggle('drop-on', !!on); },
   fullscreen(on) { document.body.classList.toggle('fullscreen', !!on); setTimeout(reportDrag, 50); },
 };
@@ -297,38 +433,167 @@ window.FR = {
 const qName = $('#qName');
 const qExt = $('#qExt');
 
-function currentCat() {
-  const list = extList(qExt.value);
-  if (!list.length) return 'all';
-  const c = CATS.find((x) => x.exts && sameSet(extList(x.exts), list));
-  return c ? c.id : null;
+// 확장자: 칸에 쓴 것은 쉼표 · 띄어쓰기 · Enter 를 만나면 조각(토큰)이 돼요. 검색은 조각 + 아직 쓰는 중인 글자로 해요.
+function extAll() { return [...new Set([...S.exts, ...extList(qExt.value)])]; }
+function extValue() { return extAll().join(', '); }
+function setExts(list, { search = true } = {}) {
+  S.exts = [...new Set(list.map((x) => String(x).toLowerCase().replace(/^\*?\.*/, '')).filter(Boolean))];
+  qExt.value = '';
+  renderExts();
+  if (search) scheduleSearch(true);
 }
+function commitExtInput() {
+  const add = extList(qExt.value);
+  if (!add.length) return false;
+  S.exts = [...new Set([...S.exts, ...add])];
+  qExt.value = '';
+  renderExts();
+  return true;
+}
+function renderExts() {
+  const max = 5;
+  const shown = S.exts.slice(0, max);
+  $('#extToks').innerHTML = shown.map((x) => `<span class="tok">${esc(x)}<button type="button" data-rmext="${esc(x)}" aria-label="${esc(x)} 빼기" tabindex="-1">${ICON_X.replace('width="12" height="12"', 'width="9" height="9"')}</button></span>`).join('') +
+    (S.exts.length > max ? `<span class="more" title="${esc(S.exts.slice(max).join(', '))}">+${S.exts.length - max}</span>` : '');
+  qExt.placeholder = S.exts.length ? '' : 'hwp, hwpx';
+  renderChips();
+  if (!$('#extPop').hidden) renderExtPop();
+}
+$('#extToks').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-rmext]');
+  if (!b) return;
+  e.stopPropagation();
+  setExts(S.exts.filter((x) => x !== b.dataset.rmext));
+});
+$('#extBox').addEventListener('mousedown', (e) => {
+  if (!e.target.closest('button, input')) { e.preventDefault(); qExt.focus(); }
+});
+qExt.addEventListener('keydown', (e) => {
+  if (e.isComposing) return;
+  if ((e.key === ',' || e.key === ' ') && qExt.value.trim()) { e.preventDefault(); commitExtInput(); scheduleSearch(true); }
+  else if (e.key === 'Backspace' && !qExt.value && S.exts.length) { e.preventDefault(); setExts(S.exts.slice(0, -1)); }
+});
+qExt.addEventListener('blur', () => { if (commitExtInput()) renderChips(); });
 
+// 분류 버튼은 여러 개를 함께 켤 수 있어요 (켜면 그 분류의 확장자를 더하고, 다시 누르면 빼요)
+function catState(c) {
+  if (!c.exts) return S.exts.length || qExt.value.trim() ? 'false' : 'true';
+  const xs = extList(c.exts);
+  const have = xs.filter((x) => extAll().includes(x)).length;
+  return have === xs.length ? 'true' : have ? 'mixed' : 'false';
+}
 function renderChips() {
-  const cur = currentCat();
-  $('#chips').innerHTML = CATS.map((c) => `<button type="button" class="chip" data-cat="${c.id}" aria-pressed="${c.id === cur}" title="${esc(c.exts || '모든 확장자')}">${c.label}</button>`).join('');
+  $('#chips').innerHTML = CATS.map((c) => {
+    const st = catState(c);
+    const xs = extList(c.exts);
+    const part = st === 'mixed' ? ` <small>${xs.filter((x) => extAll().includes(x)).length}/${xs.length}</small>` : '';
+    return `<button type="button" class="chip" data-cat="${c.id}" aria-pressed="${st}" title="${esc(c.exts || '확장자 조건 없이')}"><i aria-hidden="true"></i>${c.label}${part}</button>`;
+  }).join('');
 }
 $('#chips').addEventListener('click', (e) => {
   const b = e.target.closest('[data-cat]');
   if (!b) return;
   const c = CATS.find((x) => x.id === b.dataset.cat);
-  qExt.value = c.exts;
-  renderChips();
-  if (S.scope === 'all' && !c.exts && !qName.value.trim()) {
-    setStatus('모든 확장자 · 파일 이름을 입력해 주세요');
-    clearResults();
-    return;
+  commitExtInput();
+  if (!c.exts) {
+    setExts([], { search: false });
+    if (S.scope === 'all' && !qName.value.trim()) {
+      setStatus('모든 확장자 · 파일 이름을 입력해 주세요');
+      clearResults();
+      return;
+    }
+  } else {
+    const xs = extList(c.exts);
+    setExts(catState(c) === 'true' ? S.exts.filter((x) => !xs.includes(x)) : [...S.exts, ...xs], { search: false });
   }
   runSearch();
 });
 
+// ---------------------------------------------------------------- 확장자 고르기 창
+
+const XGROUPS = [
+  ['문서', 'doc', 'pdf hwp hwpx docx doc xlsx xls pptx ppt key pages numbers txt md rtf csv odt epub'],
+  ['이미지', 'image', 'jpg jpeg png heic heif gif webp svg tiff bmp psd raw dng avif'],
+  ['동영상', 'video', 'mp4 mov m4v mkv avi webm wmv mpg mts'],
+  ['음악', 'audio', 'mp3 m4a wav aac flac aiff ogg'],
+  ['압축', 'archive', 'zip dmg 7z rar tar gz pkg iso'],
+  ['코드', 'code', 'swift js ts py go java c cpp h html css json sh sql'],
+].map(([label, kind, xs]) => ({ label, kind, xs: xs.split(' ') }));
+
+function renderExtPop() {
+  const all = extAll();
+  $('#extGroups').innerHTML = XGROUPS.map((g) => {
+    const n = g.xs.filter((x) => all.includes(x)).length;
+    return `<div class="xg"><div class="xg-head"><i style="background:var(--k-${g.kind}-i)" aria-hidden="true"></i><b>${g.label}</b><span>${n ? `${n}개 고름` : ''}</span>` +
+      `<button type="button" data-xall="${g.kind}">${n === g.xs.length ? '모두 빼기' : '모두 고르기'}</button></div>` +
+      `<div class="xg-list">${g.xs.map((x) => `<label><input type="checkbox" data-x="${x}"${all.includes(x) ? ' checked' : ''}>${x}</label>`).join('')}</div></div>`;
+  }).join('');
+  const others = all.filter((x) => !XGROUPS.some((g) => g.xs.includes(x)));
+  $('#extCount').innerHTML = all.length ? `<b>${all.length}개</b> 골랐어요 · ${esc(all.join(', '))}` : '아직 고르지 않았어요 · 비워 두면 모든 확장자';
+  if (others.length) $('#extCount').title = '직접 넣은 것: ' + others.join(', ');
+}
+function placeExtPop() {
+  const r = $('#extBox').getBoundingClientRect();
+  const pop = $('#extPop');
+  pop.style.top = (r.bottom + 8) + 'px';
+  pop.style.maxHeight = Math.max(240, innerHeight - r.bottom - 24) + 'px';
+  pop.style.left = Math.max(12, Math.min(r.left, innerWidth - pop.offsetWidth - 12)) + 'px';
+}
+function toggleExtPop(open) {
+  const pop = $('#extPop');
+  open = open ?? pop.hidden;
+  if (open) {
+    commitExtInput();
+    renderExtPop();
+    pop.hidden = false;
+    placeExtPop();
+    $('#extAdd').focus();
+  } else {
+    pop.hidden = true;
+  }
+  $('#extPick').setAttribute('aria-expanded', String(open));
+  $('#extBox').classList.toggle('open', open);
+}
+$('#extPick').addEventListener('click', () => toggleExtPop());
+$('#extGroups').addEventListener('change', (e) => {
+  const x = e.target.dataset.x;
+  if (!x) return;
+  setExts(e.target.checked ? [...S.exts, x] : S.exts.filter((y) => y !== x), { search: false });
+});
+$('#extGroups').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-xall]');
+  if (!b) return;
+  const g = XGROUPS.find((y) => y.kind === b.dataset.xall);
+  const allOn = g.xs.every((x) => S.exts.includes(x));
+  setExts(allOn ? S.exts.filter((x) => !g.xs.includes(x)) : [...S.exts, ...g.xs], { search: false });
+});
+$('#extAdd').addEventListener('keydown', (e) => {
+  if (e.isComposing) return;
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    const add = extList(e.target.value);
+    if (add.length) { setExts([...S.exts, ...add], { search: false }); e.target.value = ''; }
+    else if (e.key === 'Enter') { toggleExtPop(false); runSearch(); }
+  } else if (e.key === 'Escape') { e.preventDefault(); toggleExtPop(false); qExt.focus(); }
+});
+$('#extClear').addEventListener('click', () => setExts([], { search: false }));
+$('#extApply').addEventListener('click', () => {
+  const add = extList($('#extAdd').value);
+  $('#extAdd').value = '';
+  if (add.length) setExts([...S.exts, ...add], { search: false });
+  toggleExtPop(false);
+  runSearch();
+});
+window.addEventListener('resize', () => { if (!$('#extPop').hidden) placeExtPop(); });
+
 let liveTimer = null;
-function scheduleSearch() {
+function scheduleSearch(soon) {
   clearTimeout(liveTimer);
-  liveTimer = setTimeout(() => runSearch({ live: true }), 450);
+  liveTimer = setTimeout(() => runSearch({ live: true }), soon === true ? 150 : 450);
 }
 qName.addEventListener('input', scheduleSearch);
 qExt.addEventListener('input', () => { renderChips(); scheduleSearch(); });
+qExt.addEventListener('focus', () => $('#extBox').classList.add('focus'));
 $('#goBtn').addEventListener('click', () => runSearch());
 
 // ---------------------------------------------------------------- 검색
@@ -341,7 +606,7 @@ function clearResults() {
   stopPolling();
   if (S.searching) stopSearch();
   document.body.classList.remove('searching');
-  $('#stopBtn').hidden = true;
+  $('#prog').hidden = true;
   S.items = []; S.total = 0; S.searched = false; S.error = ''; S.sel.clear(); S.cursor = null; S.anchor = null; S.method = '';
   S.searching = false;
   renderTable(); renderPreview(); renderToolbar(); renderStatusLeft();
@@ -369,8 +634,7 @@ function goBack() {
   const q = S.hist.pop();
   if (!q) return; // 첫 검색이면 아무 일도 하지 않아요
   qName.value = q.name;
-  qExt.value = q.ext;
-  renderChips();
+  setExts(extList(q.ext), { search: false });
   if (S.scope !== q.scope) {
     S.scope = q.scope;
     renderScope();
@@ -424,6 +688,18 @@ function applyResults(r, first, keep) {
   S.error = '';
   renderToolbar();
   renderStatusLeft();
+  renderProg();
+}
+
+function renderProg() {
+  const on = S.searching;
+  $('#prog').hidden = !on;
+  if (!on) return;
+  const spot = S.method === 'spotlight' || S.method === 'mixed';
+  $('#progSpot').classList.toggle('wait', !spot);
+  $('#progLabel').textContent = S.dirs ? '폴더 직접 확인 중' : '찾기 시작…';
+  $('#progWhere').textContent = S.dirs ? `${S.dirs.toLocaleString()} 폴더${S.cur ? ' · ' + S.cur : ''}` : '';
+  $('#progWhere').title = S.cur || '';
 }
 
 function progressText() {
@@ -435,7 +711,7 @@ function progressText() {
 async function runSearch(opts = {}) {
   clearTimeout(liveTimer);
   const name = qName.value.trim();
-  const ext = qExt.value.trim();
+  const ext = extValue();
   const exts = extList(ext);
   if (S.scope === 'all' && !name && !exts.length) {
     if (!opts.live) toast('파일 이름이나 확장자를 입력해 주세요');
@@ -460,7 +736,8 @@ async function runSearch(opts = {}) {
   S.searching = true;
   document.body.classList.add('searching');
   $('#loading').hidden = false;
-  $('#stopBtn').hidden = false;
+  S.dirs = 0; S.cur = ''; S.method = '';
+  renderProg();
   if (!opts.quiet) setStatus('찾는 중…');
   const keep = opts.keepSel ? new Set(S.sel) : null;
   if (!opts.keepSel) { S.sel.clear(); S.cursor = null; S.anchor = null; }
@@ -472,7 +749,7 @@ async function runSearch(opts = {}) {
     S.searching = false;
     document.body.classList.remove('searching');
     $('#loading').hidden = true;
-    $('#stopBtn').hidden = true;
+    renderProg();
     renderEmpty();
     renderToolbar();
   };
@@ -524,7 +801,7 @@ async function runSearch(opts = {}) {
 const SORT_LABEL = {
   name: ['이름 가나다순', '이름 역순'], dir: ['위치 가나다순', '위치 역순'],
   size: ['크기 작은 순', '크기 큰 순'], mtime: ['수정일 오래된 순', '수정일 최신순'],
-  score: ['정확도 낮은 순', '정확도순 (이름이 똑같은 파일부터)'],
+  score: ['정확도 낮은 순', '정확도순'],
 };
 const collator = new Intl.Collator('ko', { numeric: true, sensitivity: 'base' });
 function sortItems() {
@@ -558,7 +835,7 @@ const tbody = $('#tbody');
 
 function renderTable() {
   tbody.innerHTML = S.items.map((it, i) => `<div class="row" role="option" id="r${i}" data-i="${i}" aria-selected="${S.sel.has(it.path)}" title="${esc(it.path)}">` +
-    `<span class="c-name">${tileHTML(it)}<span class="nm">${esc(it.name)}</span></span>` +
+    `<span class="c-name">${tileHTML(it)}<span class="nm">${esc(it.name)}</span>${it.score >= 1000 ? '<span class="exact">이름 일치</span>' : ''}</span>` +
     `<span class="c-dir">${esc(it.dir)}</span><span class="c-size">${it.isDir ? '—' : fmtSize(it.size)}</span>` +
     `<span class="c-date">${fmtDate(it.mtime)}</span></div>`).join('');
   $$('.th').forEach((th) => {
@@ -695,6 +972,7 @@ function renderToolbar() {
   }
   if (n > 1) label += ` · ${n}개 선택`;
   $('#resLabel').textContent = label;
+  $('#dragHint').hidden = !(NATIVE && n > 0);
   $('#sortLabel').textContent = S.items.length ? SORT_LABEL[S.sort.key][S.sort.dir === 1 ? 0 : 1] : '';
 }
 $('#opCopy').addEventListener('click', () => copySel());
@@ -774,11 +1052,24 @@ async function moveSel() {
   if (!paths.length) return;
   const dests = await chooseFolders({ prompt: `${paths.length}개를 옮길 폴더를 골라 주세요`, button: '여기로 이동' });
   if (!dests.length) return;
-  setStatus('옮기는 중…');
+  await sendTo('move', paths, dests[0]);
+}
+
+// 고른 파일을 dest 폴더로 옮기거나(move) 복사해요(copy). 끌어다 놓기 · 보낼 곳 · 이동… 이 모두 이걸 써요.
+async function sendTo(mode, paths, dest) {
+  if (!paths.length || !dest) return;
+  const where = basename(dest) || dest;
+  setStatus(mode === 'move' ? '옮기는 중…' : '복사하는 중…');
   try {
-    const r = await api('/api/transfer', { mode: 'move', paths, dest: dests[0] });
+    const r = await api('/api/transfer', { mode, paths, dest });
     const items = r.items || [];
-    if (items.length) {
+    if (!items.length) {
+      if (r.skipped && !(r.errors || []).length) toast('이미 그 폴더에 있어요');
+      else reportErrors(r);
+      return;
+    }
+    let msg;
+    if (mode === 'move') {
       const map = new Map(items.map((m) => [m.from, m.to]));
       for (const it of S.items) {
         const to = map.get(it.path);
@@ -792,13 +1083,14 @@ async function moveSel() {
       renderTable();
       renderPreview();
       S.undo = { type: 'move', items, label: '이동' };
-      reportErrors(r, `${items.length}개를 ‘${basename(dests[0])}’(으)로 옮겼어요`);
-      toast(`${items.length}개를 ‘${basename(dests[0])}’(으)로 옮겼어요`, { action: '되돌리기', onAction: undo });
-    } else if (r.skipped && !(r.errors || []).length) {
-      toast('이미 그 폴더에 있어요');
+      msg = `${items.length}개를 ‘${where}’(으)로 옮겼어요`;
     } else {
-      reportErrors(r);
+      S.undo = { type: 'paste', items, label: '복사' };
+      const renamed = items.filter((m) => basename(m.to) !== basename(m.from)).length;
+      msg = `${items.length}개를 ‘${where}’에 복사했어요` + (renamed ? ` (같은 이름이 있어 ${renamed}개는 이름 뒤에 번호를 붙였어요)` : '');
     }
+    reportErrors(r, msg);
+    toast(msg, { action: '되돌리기', onAction: undo });
   } catch (e) { toast(e.message, { err: true }); }
 }
 
@@ -907,20 +1199,21 @@ $('#dlgNo').addEventListener('click', () => closeDialog(false));
 $('#dlgYes').addEventListener('click', () => closeDialog(true));
 $('#modal').addEventListener('mousedown', (e) => { if (e.target.id === 'modal') closeDialog(false); });
 
-function showMenu(x, y) {
+function showMenu(x, y, custom, acts) {
   const n = S.sel.size;
   const m = $('#menu');
   const one = n === 1;
-  m.innerHTML = [
+  menuActs = acts || null;
+  m.innerHTML = (custom || [
     ['open', '열기', 'Enter'], ['ql', 'Quick Look', 'Space'], ['reveal', 'Finder에서 보기', '⌘R'], '-',
     ['copy', one ? '복사' : `${n}개 복사`, '⌘C'], ['move', '이동…', '⌘⇧M'], ['path', '경로 복사', ''], '-',
     ['trash', '휴지통으로', '⌘⌫', 'danger'], ['delete', '즉시 삭제…', '⌘⌥⌫', 'danger'],
-  ].map((it) => it === '-' ? '<hr>' : `<button type="button" role="menuitem" data-act="${it[0]}" class="${it[3] || ''}"><span>${it[1]}</span><kbd>${it[2]}</kbd></button>`).join('');
+  ]).map((it) => it === '-' ? '<hr>' : `<button type="button" role="menuitem" data-act="${it[0]}" class="${it[3] || ''}"${it[4] ? ' disabled' : ''}><span>${it[1]}</span><kbd>${it[2]}</kbd></button>`).join('');
   m.hidden = false;
   const r = m.getBoundingClientRect();
   m.style.left = Math.min(x, innerWidth - r.width - 8) + 'px';
   m.style.top = Math.min(y, innerHeight - r.height - 8) + 'px';
-  m.querySelector('button').focus();
+  (m.querySelector('button:not(:disabled)') || m.querySelector('button')).focus();
 }
 function closeMenu() { $('#menu').hidden = true; }
 $('#menu').addEventListener('click', (e) => {
@@ -928,11 +1221,13 @@ $('#menu').addEventListener('click', (e) => {
   if (!b) return;
   closeMenu();
   const act = b.dataset.act;
+  if (menuActs) { const f = menuActs[act]; menuActs = null; if (f) f(); return; }
   ({ open: () => openItems(selPaths()), ql: quickLook, reveal: () => revealItems(selPaths()), copy: copySel, move: moveSel,
     path: copyPathText, trash: trashSel, delete: deleteSel })[act]();
 });
 document.addEventListener('mousedown', (e) => {
   if (!$('#menu').hidden && !e.target.closest('#menu')) closeMenu();
+  if (!$('#extPop').hidden && !e.target.closest('#extPop, #extPick')) toggleExtPop(false);
   if (!$('#updPop').hidden && !e.target.closest('.upd-wrap')) togglePop(false);
 });
 window.addEventListener('blur', closeMenu);
@@ -1170,7 +1465,9 @@ $('#autoSw').addEventListener('click', () => {
 // ---------------------------------------------------------------- 키보드
 
 document.addEventListener('keydown', (e) => {
+  if (e.defaultPrevented) return;
   const mod = e.metaKey || e.ctrlKey;
+  if (!$('#extPop').hidden && e.key === 'Escape') { e.preventDefault(); toggleExtPop(false); return; }
   if (!$('#modal').hidden) {
     if (e.key === 'Escape') { e.preventDefault(); closeDialog(false); }
     return;
@@ -1200,7 +1497,7 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   // ⌫ · ⌘[ = 이전 검색으로 (글 칸 · 한글 조합 중 · 떠 있는 창이 열려 있을 때는 위에서 이미 걸러져요)
-  if (!e.isComposing && $('#updPop').hidden && ((e.key === 'Backspace' && !mod && !e.altKey && !e.shiftKey) || (mod && e.code === 'BracketLeft'))) {
+  if (!e.isComposing && $('#updPop').hidden && $('#extPop').hidden && ((e.key === 'Backspace' && !mod && !e.altKey && !e.shiftKey) || (mod && e.code === 'BracketLeft'))) {
     e.preventDefault(); goBack(); return;
   }
   // 다른 곳의 글자를 골라 둔 상태면 ⌘C 는 그 글자를 복사해요
@@ -1258,6 +1555,7 @@ async function init() {
     S.appearance = st.appearance || 'system';
     S.scope = st.scope || 'all';
     S.folders = st.folders || [];
+    S.dests = st.dests || [];
     S.hidden = !!st.showHidden;
     S.autoUpdate = st.autoUpdate !== false;
     S.home = st.home || '';
@@ -1268,6 +1566,8 @@ async function init() {
   }
   applyTheme();
   renderScope();
+  renderDests();
+  renderExts();
   renderUpdate();
   qName.focus();
   if (NATIVE) {

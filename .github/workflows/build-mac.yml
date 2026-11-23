@@ -14,6 +14,7 @@ on:
       - 'scripts/smoke-mac.sh'
       - 'scripts/ci-mac.sh'
       - 'scripts/drag-test.swift'
+      - 'scripts/drag-file-test.swift'
       - '.github/workflows/build-mac.yml'
   workflow_dispatch:
 permissions:
