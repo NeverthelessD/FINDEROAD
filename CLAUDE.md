@@ -14,3 +14,7 @@ The app can only be built on a Mac: pushing changes under app/, engine/, scripts
 `ci-results` branch (read results via git: the Actions API is blocked in Claude's sessions). Release with `scripts/release.sh`.
 Commit often (the user asked for checkpoints so work can resume after an interruption).
 In tests use `pkill -x finderoad-engine`, never `pkill -f` (it matches your own shell).
+
+**Always follow the user's `road-mac-app` skill for any change to this app** (load it with the Skill tool before starting),
+including its "ROAD 앱 공통 기능" list and the design-mockup-first rule for visual changes. FINDEROAD already has:
+⌫/⌘[ = previous search, window drag (DragView regions + smoke M1), download zip, auto-update (as of v1.0.3).
