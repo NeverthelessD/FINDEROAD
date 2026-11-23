@@ -369,6 +369,9 @@ func (a *App) routes() http.Handler {
 	api("/api/settings", a.handleSettings)
 
 	api("/api/search", a.handleSearch)
+	api("/api/search/start", a.handleSearchStart)
+	api("/api/search/poll", a.handleSearchPoll)
+	api("/api/search/stop", a.handleSearchStop)
 	api("/api/info", a.handleInfo)
 	api("/api/file", a.handleFile)
 	api("/api/thumb", a.handleThumb)

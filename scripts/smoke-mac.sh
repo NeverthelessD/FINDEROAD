@@ -45,6 +45,9 @@ w(os.path.join(t, "영상", "깊은", "폴더", "드론.mp4"))
 w(os.path.join(t, "영상", ".숨김.mp4"))
 w(os.path.join(t, "문서", "메모.txt"), "FINDEROAD 시험\n안녕하세요\n".encode())
 w(os.path.join(t, "문서", "finderoad스모크고유.pdf"))
+w(os.path.join(t, "문서", "보고서.hwp"))                     # 확장자 여러 개 (hwp, hwpx) 함께 찾기
+w(os.path.join(t, "영상", "깊은", "폴더", "계획서.hwpx"))
+w(os.path.join(t, "영상", "깊은", "폴더", unicodedata.normalize("NFD", "깊은폴더고유메모.txt")))
 PY
 cp "$ROOT/app/AppIcon.png" "$T/사진/아이콘.png"
 mkdir -p "$SUP"
@@ -112,6 +115,27 @@ else
 fi
 ERR=$(curl -s -m 10 -H "x-token: $(tok)" -H 'content-type: application/json' -X POST -d '{"scope":"all"}' "http://127.0.0.1:$(port)/api/search" | js "d.get('error','')")
 check "B5 조건 없이 Mac 전체를 찾으면 안내 ($ERR)" test -n "$ERR"
+N=$(q "{\"ext\":\"hwp, hwpx\",\"scope\":\"folders\",\"folders\":[\"$T\"]}" | js "sorted(i['name'] for i in d['items'])")
+check "B6 확장자 여러 개 함께 (hwp, hwpx → $N)" test "$N" = "['계획서.hwpx', '보고서.hwp']"
+# 화면이 쓰는 방식(시작 → 진행 중 결과 받기): Mac 전체에서도 Spotlight 가 모르는 파일을 직접 훑어 찾아요
+stream() { # $1 요청, $2 찾았다고 볼 조건(파이썬, d = 지금 상태) → 마지막 상태
+  local ID R=""; ID=$(post /api/search/start "$1" | js "d['id']")
+  for _ in $(seq 1 120); do
+    R=$(get "/api/search/poll?id=$ID&v=-1")
+    [ "$(echo "$R" | js "bool(d['done'] or ($2))")" = "True" ] && break; sleep 0.5
+  done
+  echo "$R"
+}
+R=$(stream '{"ext":"hwp, hwpx","scope":"all"}' "len([i for i in d.get('items',[]) if i['path'].startswith('$T/')])>=2")
+N=$(echo "$R" | js "sorted(i['name'] for i in d.get('items',[]) if i['path'].startswith('$T/'))")
+check "B7 Mac 전체에서 확장자 여러 개 (hwp, hwpx → $N, 방법 $(echo "$R" | js "d['method']"))" test "$N" = "['계획서.hwpx', '보고서.hwp']"
+R=$(stream '{"name":"깊은폴더고유","scope":"all"}' "len(d.get('items',[]))>=1")
+N=$(echo "$R" | js "[i['name'] for i in d.get('items',[])]")
+check "B8 Mac 전체에서 깊은 폴더의 파일도 찾기 ($N · 폴더 $(echo "$R" | js "d['dirs']")개 확인)" test "$N" = "['깊은폴더고유메모.txt']"
+ID=$(post /api/search/start '{"name":"a","scope":"all"}' | js "d['id']"); sleep 1
+post /api/search/stop "{\"id\":\"$ID\"}" >/dev/null
+DONE=""; for _ in $(seq 1 20); do DONE=$(get "/api/search/poll?id=$ID&v=0" | js "d['done']"); [ "$DONE" = "True" ] && break; sleep 0.25; done
+check "B9 '그만 찾기'를 누르면 곧바로 멈춤 ($DONE)" test "$DONE" = "True"
 
 echo "▶ C. 파일 작업"
 SRC="$T/문서/메모.txt"
@@ -145,6 +169,17 @@ check "D4 자세한 정보 (만든 날짜)" bash -c "echo '$INFO' | grep -q '\"c
 echo "▶ E. Dock 아이콘 다시 누르기(reopen)"
 osascript -e 'tell application "FINDEROAD" to reopen' >/dev/null 2>&1; sleep 1
 check "E1 다시 열기 뒤에도 앱 · 엔진 그대로" test "$(app_pid)" = "$APID" -a "$(eng_pid)" = "$EPID"
+
+echo "▶ M. 창이 앞에 있을 때 맨 위를 잡고 끌어서 옮기기"
+osascript -e 'tell application "FINDEROAD" to activate' >/dev/null 2>&1; sleep 1
+screencapture -x "$OUT/shot-drag-before.png"
+MOVE=$(swift "$ROOT/scripts/drag-test.swift" FINDEROAD 2>&1 | tail -1)
+screencapture -x "$OUT/shot-drag-after.png"
+echo "$MOVE" > "$OUT/drag-test.txt"
+case "$MOVE" in
+  moved*) pass "M1 창 맨 위를 끌면 창이 움직임 ($MOVE)" ;;
+  *) echo "INFO  M1 창 옮기기를 확인하지 못함 ($MOVE) — 빌드 서버가 마우스 흉내를 막았을 수 있어요" | tee -a "$RES" ;;
+esac
 
 echo "▶ F. 엔진이 고장으로 꺼지면 앱이 다시 켬"
 kill -SEGV "$EPID" 2>/dev/null; sleep 1

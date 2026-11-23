@@ -2,6 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"net/http/httptest"
+	"strings"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -254,5 +258,115 @@ func TestCopyMove(t *testing.T) {
 func TestCompareVersions(t *testing.T) {
 	if compareVersions("1.0.10", "1.0.9") != 1 || compareVersions("1.0.0", "1.0") != 0 || compareVersions("v1.2.0", "1.10.0") != -1 {
 		t.Fatal("compare")
+	}
+}
+
+// 사용자 제보: 'hwp, hwpx' 를 함께 넣으면 둘 다 나와야 해요
+func TestMultiExt(t *testing.T) {
+	root := t.TempDir()
+	mk(t, root, "가/보고서.hwp", "나/다/계획서.hwpx", "라/표.xlsx", "마/hwp설명.txt", "바/x.HWPX")
+	for _, ext := range []string{"hwp, hwpx", "hwp hwpx", "*.hwp;*.hwpx", ".HWP，.hwpx", "hwp,hwpx,"} {
+		c := newCollector(newQuery(SearchReq{Ext: ext}))
+		walk(context.Background(), root, c, time.Now().Add(10*time.Second))
+		items, _, _, _ := c.snapshot()
+		names := []string{}
+		for _, it := range items {
+			names = append(names, it.Name)
+		}
+		sort.Strings(names)
+		if !reflect.DeepEqual(names, []string{"x.HWPX", "계획서.hwpx", "보고서.hwp"}) {
+			t.Errorf("%q → %v", ext, names)
+		}
+	}
+}
+
+// 사용자 제보: 'Mac 전체'에서는 깊은 폴더의 파일이 빠졌어요 → 큰 홈 폴더도 끝까지 훑는지
+func TestDeepWalkLargeTree(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	// 앞쪽(가나다순)에 큰 폴더를 많이 두고, 맨 뒤 깊은 곳에 찾는 파일
+	for i := 0; i < 300; i++ {
+		d := filepath.Join(home, "AAA큰폴더", fmt.Sprintf("%03d", i))
+		os.MkdirAll(d, 0o755)
+		for k := 0; k < 20; k++ {
+			os.WriteFile(filepath.Join(d, fmt.Sprintf("f%02d.dat", k)), nil, 0o644)
+		}
+	}
+	mk(t, home, "zz/깊은/곳/아주/깊은/호랑이님 증명사진.jpg", "Documents/호랑이.pdf",
+		"Library/Mobile Documents/com~apple~CloudDocs/호랑이 iCloud.txt", "Library/Caches/호랑이 캐시.txt", "Library/CloudStorage/x/호랑이.hwpx")
+	q := newQuery(SearchReq{Name: "호랑이"})
+	roots := macRoots(q)
+	if len(roots) < 3 || roots[0] != filepath.Join(home, "Documents") {
+		t.Fatalf("roots %v", roots)
+	}
+	c := newCollector(q)
+	w := newWalker(context.Background(), c, time.Now().Add(30*time.Second), roots)
+	if !w.run() {
+		t.Fatal("walk did not finish")
+	}
+	items, _, _, _ := c.snapshot()
+	got := map[string]int{}
+	for _, it := range items {
+		got[it.Name]++
+	}
+	for _, want := range []string{"호랑이님 증명사진.jpg", "호랑이.pdf", "호랑이 iCloud.txt", "호랑이.hwpx"} {
+		if got[want] != 1 {
+			t.Errorf("%s: %d번 (%v)", want, got[want], got)
+		}
+	}
+	if got["호랑이 캐시.txt"] != 0 {
+		t.Error("~/Library/Caches 는 빼야 해요")
+	}
+	// 정확도: 이름이 검색어와 똑같은 '호랑이.pdf' · '호랑이.hwpx' 가 맨 위
+	if items[0].Score < items[len(items)-1].Score || (items[0].Name != "호랑이.pdf" && items[0].Name != "호랑이.hwpx") {
+		t.Errorf("order: %v", items)
+	}
+}
+
+func TestScore(t *testing.T) {
+	q := newQuery(SearchReq{Name: "증명사진"})
+	a, b, c := q.score("증명사진.jpg"), q.score("증명사진_원본.jpg"), q.score("호랑이님 증명사진 최종본 진짜최종.jpg")
+	if !(a > b && b > c) {
+		t.Fatalf("%d %d %d", a, b, c)
+	}
+}
+
+// 화면이 쓰는 방식: 시작 → 진행 중 결과 받기 → 끝
+func TestSearchJobStream(t *testing.T) {
+	root := t.TempDir()
+	mk(t, root, "a/보고서.hwp", "b/계획서.hwpx", "c/메모.txt")
+	app := &App{token: "tk"}
+	h := app.routes()
+	call := func(method, path, body string) map[string]any {
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("x-token", "tk")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		var m map[string]any
+		json.Unmarshal(rec.Body.Bytes(), &m)
+		return m
+	}
+	st := call("POST", "/api/search/start", fmt.Sprintf(`{"ext":"hwp, hwpx","scope":"folders","folders":[%q]}`, root))
+	id, _ := st["id"].(string)
+	if id == "" {
+		t.Fatalf("start: %v", st)
+	}
+	var last map[string]any
+	for i := 0; i < 100; i++ {
+		last = call("GET", "/api/search/poll?id="+id+"&v=-1", "")
+		if last["done"] == true {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if last["done"] != true || last["total"].(float64) != 2 {
+		t.Fatalf("poll: %v", last)
+	}
+	again := call("GET", fmt.Sprintf("/api/search/poll?id=%s&v=%v", id, last["version"]), "")
+	if _, has := again["items"]; has {
+		t.Error("바뀐 게 없으면 목록은 보내지 않아요")
+	}
+	if e := call("POST", "/api/search/start", `{"scope":"all"}`); e["error"] == nil {
+		t.Error("조건 없이 Mac 전체는 안내")
 	}
 }

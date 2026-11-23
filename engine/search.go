@@ -11,7 +11,6 @@ import (
 	"context"
 	"io"
 	"io/fs"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -39,15 +38,17 @@ type Item struct {
 	MTime int64  `json:"mtime"`
 	IsDir bool   `json:"isDir"`
 	Kind  string `json:"kind"`
+	Score int    `json:"score"` // 이름이 검색어와 얼마나 맞는지 (클수록 위)
 }
 
 const (
-	collectCap = 30000
+	collectCap = 150000 // 이만큼 모으면 멈춰요 (보여 주는 건 정확도 · 최근 순으로 returnCap 개)
 	returnCap  = 2000
-	walkBudget = 25 * time.Second
-	// Spotlight 가 한글 이름의 일부(예: '호랑이님' 안의 '호랑이')를 놓치는 맥이 있어서,
-	// Spotlight 로 찾은 뒤에도 홈 폴더(또는 고른 폴더)를 잠깐 직접 훑어 빠진 파일을 채워요.
-	backupWalkBudget = 8 * time.Second
+	// 직접 훑기 시간. Spotlight 는 한글 이름 일부 · 색인에서 빠진 폴더 · 낯선 확장자(hwpx 등)를 놓칠 때가 있어서
+	// 어느 범위든 Spotlight 답을 먼저 보여 주고, 그동안 폴더를 처음부터 끝까지 직접 훑어 채워요.
+	walkBudgetAll     = 120 * time.Second // Mac 전체
+	walkBudgetFolders = 180 * time.Second // 선택한 폴더
+	walkBudgetSync    = 40 * time.Second  // 한 번에 답을 기다리는 /api/search (시험용)
 )
 
 // 안을 들여다보지 않는 묶음 폴더(앱 · 사진 보관함 등). 이름이 맞으면 하나의 항목으로 보여 줘요.
@@ -187,6 +188,46 @@ func (q *query) nameMatches(name string, isDir bool) bool {
 	return true
 }
 
+// score: 이름이 검색어와 얼마나 맞는지. 이름(확장자 뺀 것)이 검색어와 똑같으면 가장 위, 검색어로 시작하면 그다음,
+// 단어 첫머리에서 맞으면 그다음, 가운데 어딘가에 들어 있으면 그다음. 같은 점수면 짧은 이름(군더더기가 적은 것)을 위로.
+func (q *query) score(name string) int {
+	if len(q.terms) == 0 {
+		return 0
+	}
+	n := strings.ToLower(composeHangul(name))
+	stem := n
+	if e := extOf(n); e != "" {
+		stem = strings.TrimSuffix(n, "."+e)
+	}
+	joined := strings.Join(q.terms, " ")
+	cs, cj := compactName(stem), compactName(joined)
+	s := 0
+	switch {
+	case stem == joined || cs == cj:
+		s = 1000
+	case strings.HasPrefix(stem, q.terms[0]) || strings.HasPrefix(cs, cj):
+		s = 700
+	default:
+		s = 400
+	}
+	for _, t := range q.terms {
+		if i := strings.Index(stem, t); i > 0 && strings.ContainsRune(" _-.()[]", rune(stem[i-1])) {
+			s += 100 // 단어 첫머리에서 맞음
+		}
+		if strings.Contains(stem, t) {
+			s += 20 // 띄어쓰기까지 그대로 맞음
+		}
+	}
+	extra := len([]rune(cs)) - len([]rune(cj))
+	if extra < 0 {
+		extra = 0
+	}
+	if extra > 60 {
+		extra = 60
+	}
+	return s + 60 - extra
+}
+
 var systemPrefixes = []string{"/System/", "/Library/", "/private/", "/usr/", "/bin/", "/sbin/", "/opt/", "/cores/", "/dev/", "/etc/", "/var/", "/tmp/"}
 
 // skipRel: root 아래의 경로 p 를 결과에서 뺄지 (숨김 · 시스템 · 묶음 폴더 안쪽)
@@ -251,11 +292,12 @@ func extOf(name string) string {
 // ---------------------------------------------------------------- 결과 모으기
 
 type collector struct {
-	mu     sync.Mutex
-	q      *query
-	seen   map[string]bool
-	items  []Item
-	capped bool
+	mu      sync.Mutex
+	q       *query
+	seen    map[string]bool
+	items   []Item
+	capped  bool
+	version int64 // 결과가 늘 때마다 올라가요 (화면이 새로 받을지 판단)
 }
 
 func newCollector(q *query) *collector { return &collector{q: q, seen: map[string]bool{}} }
@@ -285,7 +327,10 @@ func (c *collector) add(p string, info fs.FileInfo) bool {
 		}
 	}
 	c.seen[key] = true
-	c.items = append(c.items, makeItem(p, info))
+	it := makeItem(p, info)
+	it.Score = c.q.score(it.Name)
+	c.items = append(c.items, it)
+	c.version++
 	return true
 }
 
@@ -293,6 +338,35 @@ func (c *collector) count() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return len(c.items)
+}
+
+// snapshot: 정확도 → 최근 수정 순으로 줄 세운 앞의 returnCap 개와 전체 수
+func (c *collector) snapshot() (items []Item, total int, capped bool, version int64) {
+	c.mu.Lock()
+	all := append([]Item(nil), c.items...)
+	capped, version = c.capped, c.version
+	c.mu.Unlock()
+	sortItems(all)
+	total = len(all)
+	if len(all) > returnCap {
+		all = all[:returnCap]
+	}
+	if all == nil {
+		all = []Item{}
+	}
+	return all, total, capped, version
+}
+
+func sortItems(items []Item) {
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].Score != items[j].Score {
+			return items[i].Score > items[j].Score
+		}
+		if items[i].MTime != items[j].MTime {
+			return items[i].MTime > items[j].MTime
+		}
+		return items[i].Name < items[j].Name
+	})
 }
 
 func (c *collector) markCapped() {
@@ -320,74 +394,9 @@ func makeItem(p string, info fs.FileInfo) Item {
 
 // ---------------------------------------------------------------- 폴더 직접 훑기
 
-// walk: root 아래를 훑어요. 시간이 다 되면(walkBudget) 멈추고 false 를 돌려줘요.
+// walk: root 아래를 훑어요(여러 일꾼이 함께). 시간이 다 되면 멈추고 false 를 돌려줘요.
 func walk(ctx context.Context, root string, c *collector, deadline time.Time) (finished bool) {
-	q := c.q
-	finished = true
-	n := 0
-	filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			if d != nil && d.IsDir() {
-				return fs.SkipDir
-			}
-			return nil
-		}
-		if p == root {
-			return nil
-		}
-		n++
-		if n%512 == 0 {
-			if ctx.Err() != nil || time.Now().After(deadline) {
-				finished = false
-				return fs.SkipAll
-			}
-		}
-		name := d.Name()
-		if d.IsDir() {
-			hiddenDir := !q.hidden && strings.HasPrefix(name, ".")
-			if hiddenDir {
-				return fs.SkipDir
-			}
-			if !q.hidden && q.inHiddenLibrary(root, p) && p != q.home+"/Library" {
-				return fs.SkipDir
-			}
-			ext := extOf(name)
-			if packageExts[ext] {
-				if q.nameMatches(name, true) {
-					if info, err := d.Info(); err == nil && !c.add(p, info) {
-						return fs.SkipAll
-					}
-				}
-				return fs.SkipDir
-			}
-			if p == q.home+"/Library" && !q.hidden {
-				return nil // 안쪽의 iCloud Drive · 클라우드 폴더만 들어가요
-			}
-			if q.nameMatches(name, true) {
-				if info, err := d.Info(); err == nil && !c.add(p, info) {
-					return fs.SkipAll
-				}
-			}
-			return nil
-		}
-		if !q.hidden && strings.HasPrefix(name, ".") {
-			return nil
-		}
-		if !q.hidden && q.inHiddenLibrary(root, p) {
-			return nil
-		}
-		if q.nameMatches(name, false) {
-			info, err := d.Info()
-			if err != nil {
-				return nil
-			}
-			if !c.add(p, info) {
-				return fs.SkipAll
-			}
-		}
-		return nil
-	})
-	return finished
+	return newWalker(ctx, c, deadline, []string{root}).run()
 }
 
 // ---------------------------------------------------------------- Spotlight
@@ -502,138 +511,6 @@ func mdfind(ctx context.Context, root string, c *collector) (int, error) {
 	}
 	cmd.Wait()
 	return found, nil
-}
-
-// ---------------------------------------------------------------- 요청
-
-func (a *App) handleSearch(w http.ResponseWriter, r *http.Request) {
-	var in SearchReq
-	if err := readJSON(r, &in); err != nil {
-		jsonError(w, 400, "bad request")
-		return
-	}
-	q := newQuery(in)
-	folders := in.Scope == "folders"
-	if !folders && len(q.terms) == 0 && len(q.exts) == 0 {
-		jsonError(w, 400, "파일 이름이나 확장자를 입력해 주세요")
-		return
-	}
-	var roots []string
-	if folders {
-		roots = cleanRoots(in.Folders)
-		if len(roots) == 0 {
-			jsonError(w, 400, "검색할 폴더를 추가해 주세요")
-			return
-		}
-	}
-	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
-	defer cancel()
-	start := time.Now()
-	deadline := start.Add(walkBudget)
-	c := newCollector(q)
-	var (
-		mu      sync.Mutex
-		methods = map[string]bool{}
-		notes   []string
-	)
-	note := func(m, n string) {
-		mu.Lock()
-		methods[m] = true
-		if n != "" {
-			notes = append(notes, n)
-		}
-		mu.Unlock()
-	}
-
-	if !folders {
-		if spotlightOn("/") {
-			// 이름으로 찾을 때는 Spotlight 와 함께 홈 폴더도 잠깐 직접 훑어요 (Spotlight 가 놓친 파일 채우기)
-			var wg sync.WaitGroup
-			var backup int
-			if len(q.terms) > 0 && q.home != "" {
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					defer recoverLog("search backup walk")
-					before := c.count()
-					walk(ctx, q.home, c, start.Add(backupWalkBudget))
-					backup = c.count() - before
-				}()
-			}
-			n, _ := mdfind(ctx, "/", c)
-			wg.Wait()
-			if n == 0 && backup == 0 {
-				note("spotlight", "Spotlight 에서 찾지 못했어요. 외장 디스크나 Spotlight 에서 뺀 폴더는 '선택한 폴더'에 넣어 찾아 보세요")
-			} else {
-				note("spotlight", "")
-				if backup > 0 {
-					note("walk", "")
-				}
-			}
-		} else {
-			home := q.home
-			if !walk(ctx, home, c, deadline) {
-				c.markCapped()
-			}
-			note("walk", "Spotlight 이 꺼져 있어서 홈 폴더를 직접 찾았어요")
-		}
-	} else {
-		var wg sync.WaitGroup
-		for _, root := range roots {
-			wg.Add(1)
-			go func(root string) {
-				defer wg.Done()
-				defer recoverLog("search " + root)
-				if spotlightOn(root) {
-					if n, err := mdfind(ctx, root, c); err == nil && n > 0 {
-						note("spotlight", "")
-						// Spotlight 가 놓친 파일이 있을 수 있어 잠깐 직접 훑어 채워요
-						if len(q.terms) > 0 {
-							walk(ctx, root, c, time.Now().Add(backupWalkBudget))
-							note("walk", "")
-						}
-						return
-					}
-				}
-				if !walk(ctx, root, c, deadline) {
-					c.markCapped()
-				}
-				note("walk", "")
-			}(root)
-		}
-		wg.Wait()
-	}
-
-	c.mu.Lock()
-	items := c.items
-	if items == nil {
-		items = []Item{}
-	}
-	capped := c.capped
-	c.mu.Unlock()
-	sort.SliceStable(items, func(i, j int) bool {
-		if items[i].MTime != items[j].MTime {
-			return items[i].MTime > items[j].MTime
-		}
-		return items[i].Name < items[j].Name
-	})
-	total := len(items)
-	if len(items) > returnCap {
-		items = items[:returnCap]
-	}
-	method := "walk"
-	if methods["spotlight"] && methods["walk"] {
-		method = "mixed"
-	} else if methods["spotlight"] {
-		method = "spotlight"
-	}
-	if ctx.Err() == context.Canceled {
-		return // 화면이 새 검색을 시작해서 이 요청은 버려졌어요
-	}
-	writeJSON(w, map[string]any{
-		"ok": true, "items": items, "total": total, "capped": capped, "method": method,
-		"ms": time.Since(start).Milliseconds(), "notes": notes,
-	})
 }
 
 // cleanRoots: 있는 폴더만, 다른 고른 폴더 안에 들어 있는 폴더는 빼요 (같은 파일이 두 번 나오지 않게)

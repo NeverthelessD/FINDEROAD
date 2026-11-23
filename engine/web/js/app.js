@@ -24,12 +24,14 @@ const TEXT_EXT = new Set('txt md markdown csv tsv json js mjs ts jsx tsx py go s
 const KEYS = [
   ['⌘F', '검색창으로'], ['Space', '미리보기 (Quick Look)'], ['⌘C', '복사'], ['⌘V', '붙여넣기'],
   ['⌘⇧M', '이동'], ['⌘⌫', '휴지통으로'], ['⌘⌥⌫', '즉시 삭제'], ['⌘Z', '되돌리기'],
+  ['⌫', '이전 검색으로'],
 ];
 
 const S = {
   appearance: 'system', scope: 'all', folders: [], hidden: false, autoUpdate: true, home: '', build: '',
   items: [], total: 0, capped: false, method: '', ms: 0, notes: [], searched: false, searching: false, error: '',
-  sel: new Set(), anchor: null, cursor: null, sort: { key: 'mtime', dir: -1 }, undo: null, update: null,
+  sel: new Set(), anchor: null, cursor: null, sort: { key: 'mtime', dir: -1 }, sortUser: false, undo: null, update: null,
+  partial: false, dirs: 0, cur: '', hist: [], curQ: null, curLive: false,
 };
 
 // ---------------------------------------------------------------- 엔진 · 앱 연결
@@ -336,10 +338,98 @@ let searchSeq = 0;
 
 function clearResults() {
   searchCtl && searchCtl.abort();
+  stopPolling();
+  if (S.searching) stopSearch();
+  document.body.classList.remove('searching');
+  $('#stopBtn').hidden = true;
   S.items = []; S.total = 0; S.searched = false; S.error = ''; S.sel.clear(); S.cursor = null; S.anchor = null; S.method = '';
   S.searching = false;
   renderTable(); renderPreview(); renderToolbar(); renderStatusLeft();
   $('#loading').hidden = true;
+}
+
+const sameQ = (a, b) => a && b && a.name === b.name && a.ext === b.ext && a.scope === b.scope;
+
+// ⌫ 뒤로 가기: 지나온 검색을 기억해요. 입력하는 중에 한 글자씩 바뀌는 검색은 하나로 묶어요.
+function rememberQuery(q, live) {
+  const c = S.curQ;
+  if (c && !sameQ(c, q)) {
+    const typing = live && S.curLive && c.scope === q.scope && c.ext === q.ext && (q.name.startsWith(c.name) || c.name.startsWith(q.name));
+    const typingExt = live && S.curLive && c.scope === q.scope && c.name === q.name && (q.ext.startsWith(c.ext) || c.ext.startsWith(q.ext));
+    if (!typing && !typingExt) {
+      S.hist.push(c);
+      if (S.hist.length > 50) S.hist.shift();
+    }
+  }
+  S.curQ = q;
+  S.curLive = !!live;
+}
+
+function goBack() {
+  const q = S.hist.pop();
+  if (!q) return; // 첫 검색이면 아무 일도 하지 않아요
+  qName.value = q.name;
+  qExt.value = q.ext;
+  renderChips();
+  if (S.scope !== q.scope) {
+    S.scope = q.scope;
+    renderScope();
+    saveSettings({ scope: q.scope });
+  }
+  S.curQ = q; S.curLive = false;
+  runSearch({ back: true });
+  setStatus('이전 검색으로 돌아왔어요');
+}
+
+let pollTimer = null;
+let jobId = '';
+function stopPolling() { clearTimeout(pollTimer); pollTimer = null; }
+
+function stopSearch() {
+  if (!S.searching || !jobId) return;
+  api('/api/search/stop', { id: jobId }).catch(() => {});
+}
+$('#stopBtn').addEventListener('click', stopSearch);
+
+// 새로 받은 결과를 화면에 넣어요. 골라 둔 파일 · 커서는 그대로 지켜요.
+function applyResults(r, first, keep) {
+  if (r.items) {
+    const curPath = S.cursor != null && S.items[S.cursor] ? S.items[S.cursor].path : null;
+    S.items = r.items;
+    sortItems();
+    if (keep) {
+      S.sel = new Set(S.items.filter((i) => keep.has(i.path)).map((i) => i.path));
+    } else if (first && !S.sel.size && S.items.length) {
+      S.sel = new Set([S.items[0].path]);
+    } else {
+      const have = new Set(S.items.map((i) => i.path));
+      S.sel = new Set([...S.sel].filter((p) => have.has(p)));
+    }
+    if (curPath) S.cursor = S.items.findIndex((i) => i.path === curPath);
+    else if (S.sel.size) S.cursor = S.items.findIndex((i) => S.sel.has(i.path));
+    if (S.cursor < 0) S.cursor = null;
+    S.anchor = S.cursor;
+    fixCursor();
+    renderTable();
+  }
+  S.total = r.total || 0;
+  S.capped = !!r.capped;
+  S.partial = !!r.partial;
+  S.method = r.method || '';
+  S.ms = r.ms || 0;
+  S.notes = r.notes || [];
+  S.dirs = r.dirs || 0;
+  S.cur = r.cur || '';
+  S.searched = true;
+  S.error = '';
+  renderToolbar();
+  renderStatusLeft();
+}
+
+function progressText() {
+  const n = S.total ? `${S.total.toLocaleString()}개 찾음` : '찾는 중';
+  const where = S.dirs ? ` · 폴더 ${S.dirs.toLocaleString()}개 확인` : '';
+  return `${n}${where}…`;
 }
 
 async function runSearch(opts = {}) {
@@ -359,56 +449,74 @@ async function runSearch(opts = {}) {
   // 글자 하나로 Mac 전체를 뒤지면 너무 많아서, 입력 중에는 두 글자부터 찾아요 (Enter 는 바로)
   if (opts.live && S.scope === 'all' && !exts.length && [...name].length < 2) return;
 
+  const q = { name, ext, scope: S.scope };
+  if (!opts.back && !opts.quiet) rememberQuery(q, opts.live);
+  if (!S.sortUser) S.sort = name ? { key: 'score', dir: -1 } : { key: 'mtime', dir: -1 };
+
   searchCtl && searchCtl.abort();
+  stopPolling();
   const ctl = searchCtl = new AbortController();
   const seq = ++searchSeq;
   S.searching = true;
+  document.body.classList.add('searching');
   $('#loading').hidden = false;
+  $('#stopBtn').hidden = false;
   if (!opts.quiet) setStatus('찾는 중…');
-  renderEmpty();
   const keep = opts.keepSel ? new Set(S.sel) : null;
-  try {
-    const r = await api('/api/search', { name, ext, scope: S.scope, folders: S.folders.map((f) => f.path), hidden: S.hidden }, { signal: ctl.signal });
+  if (!opts.keepSel) { S.sel.clear(); S.cursor = null; S.anchor = null; }
+  renderEmpty();
+  let first = true;
+  let version = -1;
+  const finish = () => {
     if (seq !== searchSeq) return;
-    S.items = r.items || [];
-    S.total = r.total || 0;
-    S.capped = !!r.capped;
-    S.method = r.method || '';
-    S.ms = r.ms || 0;
-    S.notes = r.notes || [];
-    S.searched = true;
-    S.error = '';
-    sortItems();
-    if (keep) {
-      S.sel = new Set(S.items.filter((i) => keep.has(i.path)).map((i) => i.path));
-    } else {
-      S.sel = new Set(S.items.length ? [S.items[0].path] : []);
-      S.anchor = S.items.length ? 0 : null;
-      S.cursor = S.anchor;
-    }
-    fixCursor();
-    renderTable();
-    renderPreview();
+    S.searching = false;
+    document.body.classList.remove('searching');
+    $('#loading').hidden = true;
+    $('#stopBtn').hidden = true;
+    renderEmpty();
     renderToolbar();
-    renderStatusLeft();
-    if (!opts.quiet) {
-      const secs = (S.ms / 1000).toFixed(S.ms < 10000 ? 2 : 0);
-      setStatus(S.items.length ? `${S.total.toLocaleString()}개 찾음 · ${secs}초` + (S.notes.length ? ` · ${S.notes[0]}` : '') : (S.notes[0] || '찾은 파일이 없어요'));
-    }
-  } catch (e) {
-    if (e.name === 'AbortError') return;
-    if (seq !== searchSeq) return;
+  };
+  const fail = (e) => {
+    if (e.name === 'AbortError' || seq !== searchSeq) return;
     S.items = []; S.total = 0; S.searched = true; S.error = e.message;
     S.sel.clear();
     renderTable(); renderPreview(); renderToolbar();
     setStatus(e.message);
-  } finally {
-    if (seq === searchSeq) {
-      S.searching = false;
-      $('#loading').hidden = true;
-      renderEmpty();
+    finish();
+  };
+  try {
+    const st = await api('/api/search/start', { name, ext, scope: S.scope, folders: S.folders.map((f) => f.path), hidden: S.hidden }, { signal: ctl.signal });
+    if (seq !== searchSeq) return;
+    jobId = st.id;
+  } catch (e) { fail(e); return; }
+  const started = Date.now();
+  const poll = async () => {
+    if (seq !== searchSeq) return;
+    let r;
+    try {
+      r = await api(`/api/search/poll?id=${jobId}&v=${version}`, undefined, { signal: ctl.signal });
+    } catch (e) { fail(e); return; }
+    if (seq !== searchSeq) return;
+    const hadSel = S.sel.size;
+    applyResults(r, first, first ? keep : null);
+    if (r.items) {
+      version = r.version;
+      if (first || (!hadSel && S.sel.size)) renderPreview();
+      if (r.items.length) first = false;
     }
-  }
+    if (r.done) {
+      finish();
+      if (!opts.quiet) {
+        const secs = (S.ms / 1000).toFixed(S.ms < 10000 ? 2 : 0);
+        setStatus(S.items.length ? `${S.total.toLocaleString()}개 찾음 · ${secs}초` + (S.notes.length ? ` · ${S.notes[0]}` : '') : (S.notes[0] || '찾은 파일이 없어요'));
+      }
+      if (!S.items.length) renderPreview();
+      return;
+    }
+    if (!opts.quiet) setStatus(progressText());
+    pollTimer = setTimeout(poll, Date.now() - started < 4000 ? 300 : 700);
+  };
+  pollTimer = setTimeout(poll, 150);
 }
 
 // ---------------------------------------------------------------- 정렬 · 표
@@ -416,6 +524,7 @@ async function runSearch(opts = {}) {
 const SORT_LABEL = {
   name: ['이름 가나다순', '이름 역순'], dir: ['위치 가나다순', '위치 역순'],
   size: ['크기 작은 순', '크기 큰 순'], mtime: ['수정일 오래된 순', '수정일 최신순'],
+  score: ['정확도 낮은 순', '정확도순 (이름이 똑같은 파일부터)'],
 };
 const collator = new Intl.Collator('ko', { numeric: true, sensitivity: 'base' });
 function sortItems() {
@@ -425,6 +534,7 @@ function sortItems() {
     if (key === 'name') r = collator.compare(a.name, b.name);
     else if (key === 'dir') r = collator.compare(a.dir, b.dir) || collator.compare(a.name, b.name);
     else if (key === 'size') r = (a.size ?? -1) - (b.size ?? -1);
+    else if (key === 'score') r = (a.score - b.score) || (a.mtime - b.mtime);
     else r = a.mtime - b.mtime;
     return r * dir;
   });
@@ -433,6 +543,7 @@ $('.thead').addEventListener('click', (e) => {
   const b = e.target.closest('[data-sort]');
   if (!b) return;
   const key = b.dataset.sort;
+  S.sortUser = true;
   if (S.sort.key === key) S.sort.dir *= -1;
   else S.sort = { key, dir: key === 'name' || key === 'dir' ? 1 : -1 };
   const cur = S.cursor != null && S.items[S.cursor] ? S.items[S.cursor].path : null;
@@ -463,7 +574,7 @@ function renderEmpty() {
   if (S.items.length) { el.hidden = true; return; }
   el.hidden = false;
   if (S.searching) {
-    el.innerHTML = '<b>찾는 중…</b>';
+    el.innerHTML = `<b>찾는 중…</b><span>${S.dirs ? `폴더 ${S.dirs.toLocaleString()}개 확인` : 'Spotlight 에 묻고, 폴더도 직접 살펴보는 중이에요'}</span>`;
   } else if (S.error) {
     el.innerHTML = `<b>${esc(S.error)}</b>`;
   } else if (S.searched) {
@@ -578,7 +689,8 @@ function renderToolbar() {
   ['#opCopy', '#opMove', '#opTrash', '#opDelete'].forEach((id) => { $(id).disabled = n === 0; });
   let label = '결과';
   if (S.searched) {
-    label = S.total > S.items.length ? `결과 ${S.total.toLocaleString()}개 중 최근 ${S.items.length.toLocaleString()}개` : `결과 ${S.items.length.toLocaleString()}개`;
+    label = S.total > S.items.length ? `결과 ${S.total.toLocaleString()}개 중 ${S.items.length.toLocaleString()}개` : `결과 ${S.items.length.toLocaleString()}개`;
+    if (S.searching) label += ' · 더 찾는 중';
     if (S.capped) label += ' (너무 많아 일부만)';
   }
   if (n > 1) label += ` · ${n}개 선택`;
@@ -1075,7 +1187,7 @@ document.addEventListener('keydown', (e) => {
   }
   if (mod && e.code === 'KeyF') { e.preventDefault(); qName.focus(); qName.select(); return; }
   if (mod && e.code === 'KeyR') { e.preventDefault(); revealItems(selPaths()); return; }
-  const inField = e.target.matches('input[type="text"], textarea');
+  const inField = e.target.matches('input[type="text"], input[type="search"], textarea, select, [contenteditable=""], [contenteditable="true"]');
   if (inField) {
     if (e.key === 'Enter') { e.preventDefault(); runSearch(); }
     else if (e.key === 'Escape') { e.target.blur(); }
@@ -1084,7 +1196,12 @@ document.addEventListener('keydown', (e) => {
   }
   if (e.key === 'Escape') {
     if (!$('#updPop').hidden) { togglePop(false); return; }
+    if (S.searching) { stopSearch(); return; }
     return;
+  }
+  // ⌫ · ⌘[ = 이전 검색으로 (글 칸 · 한글 조합 중 · 떠 있는 창이 열려 있을 때는 위에서 이미 걸러져요)
+  if (!e.isComposing && $('#updPop').hidden && ((e.key === 'Backspace' && !mod && !e.altKey && !e.shiftKey) || (mod && e.code === 'BracketLeft'))) {
+    e.preventDefault(); goBack(); return;
   }
   // 다른 곳의 글자를 골라 둔 상태면 ⌘C 는 그 글자를 복사해요
   const textSel = String(window.getSelection() || '').trim();
