@@ -11,6 +11,20 @@
 
 ## 진행 사항
 
+- **2026-11-23 v1.1.0 새 디자인 · 확장자 고르기 · 끌어서 옮기기 (사용자 요청, 시안 B 확정)**
+  - 디자인: 디자인 캔버스 "FINDEROAD 1.1 디자인 시안"의 **B · 밤의 고속도로**. 다크 #0D1016 바탕 + 호박색 #FFB020(라이트는 #B45309) · 주황 #FF7A1A
+    그라데이션(진행 막대), 위쪽 막대 아래 차선 점선, 왼쪽 막대 경계도 점선. 글꼴 **Gothic A1**(본문, OFL) + **Orbit**(로고 · 제목, OFL) + IBM Plex Mono(숫자 · 경로),
+    `engine/web/fonts/ga1 · orbit` 에 내장(fontsource npm 패키지에서 woff2). IBM Plex Sans KR 은 뺌. 종류별 색 아이콘(문서 파랑 · 동영상 보라 · 이미지 청록 ·
+    음악 분홍 · 압축 호박 · 코드 회색), '이름 일치' 표시(정확도 1000 이상).
+  - 확장자: 칸이 조각(토큰) 칸으로 — 쉼표 · 띄어쓰기 · Enter 로 조각, 빈 칸에서 ⌫ 는 마지막 조각 빼기. **고르기** 창(종류별 체크 · 모두 고르기 · 직접 넣기 ·
+    이걸로 찾기). 분류 버튼은 여러 개 함께 켜짐(일부만 켜지면 2/16 처럼 표시, aria-pressed=mixed).
+  - 보낼 곳: 설정 `dests`. 왼쪽에 목록 · 추가 · 빼기, 누르면 '고른 파일을 여기로 이동 · 복사 · Finder에서 열기' 메뉴. Finder 에서 폴더를 그 자리에 끌어다 놓아도 추가.
+  - 끌어서 옮기기: 화면이 줄을 누른 채 5px 움직이면 `dragFiles` → Swift `FRWebView.startFileDrag`(마지막 마우스 움직임을 NSEvent 로컬 감시로 기억해 두었다가
+    `beginDraggingSession`). Finder · 데스크탑 · 다른 앱에 놓으면 macOS 규칙(같은 디스크 이동 · 다른 디스크 복사 · ⌥ 복사), 끝나면 `/api/exists` 로 사라진 줄을 뺌.
+    이 창의 '보낼 곳'이나 결과 속 폴더에 놓으면 `FR.dragOver · dragDrop` → `sendTo(move|copy)`(⌥ = 복사, 되돌리기 됨).
+  - 진행 표시: 검색 칸 아래 막대(Spotlight ✓ · 폴더 직접 확인 중 · 확인한 폴더 수 · 지금 보는 폴더 · 그만 찾기 Esc).
+  - 사용 가이드 이미지도 밤의 고속도로 분위기로 다시 만듦(guide-screen.png 는 리눅스 Playwright 다크 화면).
+  - 맥 시험 N1 추가: 자체 시험이 첫 줄 · 첫 보낼 곳의 화면 위치를 남기고, `scripts/drag-file-test.swift` 가 ⌥ 를 누른 채 끌어다 놓아 복사되는지 확인 → 통과.
 - **2026-11-23 v1.0.3 검색 정확도 (사용자 요청)**: ① 'Mac 전체'에서 '선택한 폴더'로는 나오는 파일이 빠짐 ② 'hwp, hwpx' 를 함께 넣으면 한쪽이 안 나옴.
   원인: Mac 전체는 Spotlight + 홈 폴더를 **한 줄로 8초만** 훑었고(큰 홈이면 깊은 곳까지 못 감), 확장자만으로 찾을 때는 그마저 안 했어요 → Spotlight 가 모르는
   파일(낯선 확장자 hwpx, 색인에서 빠진 폴더)은 영영 안 나왔어요. 고친 것: 어느 범위든 **Spotlight 답을 먼저 보여 주고, 동시에 폴더를 끝까지 직접 훑음**
@@ -22,8 +36,7 @@
   맥 시험 M1(창이 앞에 있을 때 맨 위를 끌어 옮기기, `scripts/drag-test.swift`). FINDEROAD 는 처음부터 DragView(화면이 알려 준 빈 곳에 깔림)라서 창 옮기기는 이미 됨.
   맥 시험 추가: B6(폴더에서 hwp, hwpx) · B7(Mac 전체에서 hwp, hwpx) · B8(Mac 전체에서 깊은 폴더) · B9(그만 찾기).
   빌드 서버에서 찾은 버그: Spotlight 는 /private/var/… , 직접 훑기는 /var/… 로 같은 파일을 줘서 두 번 나옴 → dedupeKey · mdfind 경로 되돌리기. 맥 시험 54개 통과 → 출시.
-  디자인 시안: 디자인 캔버스 "FINDEROAD 1.1 디자인 시안"(A 오렌지 길 · B 밤의 고속도로 · C 도로 표지판, 라이트/다크, 확장자 고르기 · 끌어서 옮기기) — 사용자 확정 기다리는 중.
-- **다음(사용자 요청, 디자인 시안 확정 뒤)**: 디자인 새로(너무 심플하다는 의견), 확장자 여러 개 골라 체크하기, 결과를 끌어서 Finder 등으로 이동 · 복사.
+  디자인 시안: 디자인 캔버스 "FINDEROAD 1.1 디자인 시안"(A 오렌지 길 · B 밤의 고속도로 · C 도로 표지판) → 사용자가 B 로 확정 → 1.1.0.
 - **2026-10-31 v1.0.1 이름 일부로 찾기 (사용자 요청)**: '호랑이'로 '호랑이님 증명사진'이 안 나오던 문제. 엔진의 이름 비교는 원래 '포함'이었지만
   Mac 전체 검색은 Spotlight 답에만 기대서 Spotlight 가 놓치면 끝이었음. 고친 것: ① Spotlight 질의를 여러 모양으로(FSName · DisplayName, NFC · NFD,
   'cd' · 'c') ② 이름으로 찾을 때는 Spotlight 와 함께 홈 폴더를 8초 동안 직접 훑어 빠진 파일을 채움(선택한 폴더도 Spotlight 가 찾은 뒤 8초 더 훑음)
@@ -78,7 +91,7 @@ engine/                Go 엔진(표준 라이브러리만). 화면(web/)을 내
   preview.go           파일 내보내기(동영상 · 음악 · 이미지), Quick Look 썸네일(qlmanage), 글 미리보기
   hangul.go            한글 NFC/NFD 변환
   update.go            자동 업데이트(releases/latest.json)
-  web/                 index.html · css · js · fonts(IBM Plex Sans KR · IBM Plex Mono)
+  web/                 index.html · css · js · fonts(Gothic A1 · Orbit · IBM Plex Mono)
 scripts/               build-mac.sh · smoke-mac.sh · ci-mac.sh · release.sh · feed.py · guide.py · icon.py
 releases/              FINDEROAD-x.y.z.zip · latest.json
 docs/                  사용 가이드 이미지와 원본(guide.html · guide-screen.png). 고친 뒤 scripts/guide.py
@@ -113,10 +126,11 @@ chooseFolders · trash · pbWriteFiles · pbReadFiles · pbWriteText · quickloo
 - 사용자에게 보이는 곳(앱 화면 · 가이드 이미지)에는 GitHub 나 저장소 이름을 쓰지 않는다 (MSROAD 와 같은 원칙).
 - 화면 모드: 시스템 설정 따르기(기본) / 라이트 / 다크.
 - 화면 아래 `made by. Nevertheless_D`.
-- 디자인: 무채색 바탕 + 주황 포인트(라이트 #C2410C, 다크 #FB923C). 글꼴 IBM Plex Sans KR(한글 UI) + IBM Plex Mono(확장자 · 경로 · 크기 · 버전), 앱에 내장.
+- 디자인(1.1.0~): **B · 밤의 고속도로** — 다크 #0D1016 / 라이트 #EEF1F6 바탕, 포인트 호박색(다크 #FFB020, 라이트 #B45309), 차선 점선 장식. 글꼴 Gothic A1(본문) + Orbit(로고 · 제목) + IBM Plex Mono, 앱에 내장. (1.0.x 는 무채색 + 주황 · IBM Plex Sans KR)
   아이콘: 짙은/밝은 주황으로 나뉜 정사각형(경계선 = 굽은 길), 왼쪽 눈, 오른쪽 눈에 돋보기. 워드마크 FINDE + R(반반) + OAD.
 - 검색어는 이름 어디에든 들어 있으면 찾음(앞 · 가운데 · 뒤). 띄어쓰기 · _ · - 는 무시하고도 비교. Spotlight 를 믿지 않고 **언제나 끝까지 직접 훑기**(1.0.3~). 이름으로 찾으면 기본 정렬은 정확도순.
-- 검색: 이름 칸과 확장자 칸이 따로. 이름을 비우고 확장자만으로도 검색. 분류 버튼(전체 · 동영상 · 이미지 · 문서 · 음악 · 압축 · 코드)을 누르면 확장자 칸이 채워짐.
+- 검색: 이름 칸과 확장자 칸이 따로. 이름을 비우고 확장자만으로도 검색. 확장자는 조각(토큰)으로 여러 개, '고르기' 창에서 체크. 분류 버튼은 여러 개 함께 켜짐(누르면 그 분류 확장자 더하기 · 다시 누르면 빼기).
+- 보낼 곳 · 끌어서 옮기기: 결과를 끌어서 Finder · 데스크탑 · 보낼 곳 · 결과 속 폴더에 놓기. 앱 안에 놓으면 이동(⌥ 복사), 되돌리기 됨.
   범위: Mac 전체 또는 선택한 폴더(여러 개, 하위 폴더 포함). 초성 검색은 하지 않음(사용자 결정).
 - 삭제: 기본은 휴지통으로(⌘⌫, ⌘Z 로 되돌리기). **즉시 삭제**(⌘⌥⌫)는 확인 창을 거친 뒤 되돌릴 수 없게 지움.
 - 붙여넣기 · 이동: 검색 결과에는 '현재 폴더'가 없으므로 대상 폴더를 고르는 창을 띄운다. 같은 이름이 있으면 '파일 2.mp4' 처럼 둘 다 남긴다.

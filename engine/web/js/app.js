@@ -450,8 +450,12 @@ function commitExtInput() {
   renderExts();
   return true;
 }
+const narrowMQ = window.matchMedia('(max-width: 1240px)');
+narrowMQ.addEventListener('change', () => renderExts());
 function renderExts() {
-  const max = 5;
+  // 칸이 좁으면 앞의 몇 개만 보여 주고 나머지는 '+개수'로 (마우스를 올리면 모두 보여요)
+  const room = narrowMQ.matches ? 1 : 3;
+  const max = S.exts.length > room + 1 ? room : room + 1;
   const shown = S.exts.slice(0, max);
   $('#extToks').innerHTML = shown.map((x) => `<span class="tok">${esc(x)}<button type="button" data-rmext="${esc(x)}" aria-label="${esc(x)} 빼기" tabindex="-1">${ICON_X.replace('width="12" height="12"', 'width="9" height="9"')}</button></span>`).join('') +
     (S.exts.length > max ? `<span class="more" title="${esc(S.exts.slice(max).join(', '))}">+${S.exts.length - max}</span>` : '');
