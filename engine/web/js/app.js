@@ -928,7 +928,7 @@ function renderEmpty() {
   } else if (S.error) {
     el.innerHTML = `${EMPTY_ART}<b>${esc(S.error)}</b>`;
   } else if (S.searched) {
-    el.innerHTML = `${EMPTY_ART}<b>조건에 맞는 파일이 없어요</b><span>이름을 조금 짧게 적거나, 확장자 · 분류 · 검색 범위를 바꿔 보세요</span>` + (S.notes.length ? `<span>${esc(S.notes[0])}</span>` : '');
+    el.innerHTML = `${EMPTY_ART}<b>조건에 맞는 파일이 없어요</b><span>이름을 조금 짧게 적거나, 확장자 · 분류 · 검색 범위를 바꿔 보세요</span>` + (S.notes.length && !/찾은 파일이 없/.test(S.notes[0]) ? `<span>${esc(S.notes[0])}</span>` : '');
   } else {
     el.innerHTML = '';
   }

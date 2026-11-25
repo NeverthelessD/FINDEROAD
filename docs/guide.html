@@ -2,119 +2,106 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>FINDEROAD 사용 가이드</title>
+<title>FindeROAD 사용 가이드</title>
 <!-- 사용 가이드 이미지 원본. scripts/guide.py 로 docs/FINDEROAD_사용가이드.png 를 만들어요 -->
-<link rel="stylesheet" href="../engine/web/fonts/gothic-a1.css">
-<link rel="stylesheet" href="../engine/web/fonts/orbit.css">
-<link rel="stylesheet" href="../engine/web/fonts/plex-mono.css">
+<link rel="stylesheet" href="../engine/web/fonts/fonts.css">
 <style>
 :root {
-  --bg: #0D1016; --chrome: #0B0E13; --surface: #151A23; --well: #1C2230; --ink: #E8ECF3; --muted: #9AA4B5; --line: #263041; --line-soft: #1E2633;
-  --accent: #FFB020; --accent-soft: #2C2410; --accent-ink: #FFD27A; --danger: #F87171; --danger-soft: #3A1717;
-  --sans: "Gothic A1", sans-serif; --display: "Orbit", "Gothic A1", sans-serif; --mono: "IBM Plex Mono", monospace;
+  --bg: #F3F7F4; --card: #FFFFFF; --card2: #EEF3EF; --line: #E1E9E3; --ink: #0F1712; --ink2: #2C3830; --muted: #5B6A60;
+  --accent: #0B8A5F; --accent-soft: #E3F4EC; --accent-ink: #076345; --danger: #D92D20; --danger-soft: #FFF0EE;
 }
 * { box-sizing: border-box; }
-body { margin: 0; width: 1200px; background: var(--bg); color: var(--ink); font: 14px/1.6 var(--sans); -webkit-font-smoothing: antialiased; }
-.wrap { padding: 44px 48px 30px; }
-.hero { display: flex; align-items: center; gap: 28px; }
-.hero img { width: 112px; height: 112px; margin: -10px; }
-.wm { font: 400 42px var(--display); letter-spacing: .14em; white-space: nowrap; }
-.wm span { color: var(--accent); text-shadow: 0 0 18px rgba(255,176,32,.45); }
-.road { height: 3px; margin: 26px 0 0; background: repeating-linear-gradient(90deg, var(--accent) 0 18px, transparent 18px 30px); opacity: .8; }
-.wm .r { position: relative; display: inline-block; letter-spacing: 0; margin-right: .16em; color: var(--accent); }
-.wm .r span { position: absolute; left: 0; top: 0; color: var(--ink); clip-path: inset(0 50% 0 0); }
-.wm .o { color: var(--accent); }
-.hero p { margin: 8px 0 12px; font-size: 18px; font-weight: 700; }
-.pills { display: flex; gap: 8px; flex-wrap: wrap; }
-.pill { padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: 12.5px; font-weight: 500; color: var(--muted); }
-.shot { margin: 30px 0 6px; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 24px 60px rgba(0,0,0,.55), 0 0 40px rgba(255,176,32,.08); }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 14px/1.65 'Pretendard', sans-serif; word-break: keep-all; -webkit-font-smoothing: antialiased; }
+.wrap { width: 1200px; padding: 48px 56px 40px; display: flex; flex-direction: column; gap: 24px; }
+.hero { display: flex; align-items: center; gap: 24px; }
+.hero img { width: 120px; height: 120px; margin: -12px; }
+.wm { font: 800 40px/1 'Unbounded', sans-serif; letter-spacing: -0.01em; }
+.wm span { color: var(--accent); }
+.hero p { margin: 10px 0 12px; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+.pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill { padding: 4px 12px; border-radius: 14px; background: var(--card); font-size: 12px; font-weight: 600; color: var(--ink2); }
+.shot { border-radius: 24px; overflow: hidden; box-shadow: 0 24px 60px rgba(15, 40, 25, .18); }
 .shot img { display: block; width: 100%; }
-h2 { margin: 34px 2px 14px; font: 400 21px var(--display); letter-spacing: .02em; display: flex; align-items: baseline; gap: 12px; }
-h2 small { font-size: 13px; font-weight: 400; color: var(--muted); }
-h2 .n { font: 600 13px var(--mono); color: var(--accent); letter-spacing: .08em; }
-.grid { display: grid; gap: 14px; }
-.c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.c2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
-.card h3 { margin: 0 0 6px; font-size: 15.5px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
-.card p { margin: 0; color: var(--muted); font-size: 13px; }
-.card p b, .card li b { color: var(--ink); font-weight: 600; }
-.num { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; background: var(--accent-soft); color: var(--accent-ink); font: 600 13px var(--mono); flex: 0 0 auto; }
-code { font: 12.5px var(--mono); color: var(--accent-ink); background: var(--accent-soft); padding: 1px 6px; border-radius: 4px; }
-kbd { font: 500 12px var(--mono); padding: 1px 7px; border-radius: 5px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); white-space: nowrap; }
-.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-.chip { padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); font-size: 12px; }
-.chip.on { background: var(--accent-soft); border: 1.5px solid var(--accent); color: var(--accent-ink); font-weight: 700; }
-.tok { font: 600 12px var(--mono); background: var(--accent-soft); color: var(--accent-ink); padding: 2px 8px; border-radius: 6px; }
+h2 { margin: 16px 0 0; font-size: 24px; font-weight: 800; letter-spacing: -0.03em; display: flex; align-items: baseline; gap: 12px; }
+h2 .n { width: 32px; height: 32px; border-radius: 10px; background: var(--accent); color: #FFFFFF; font: 800 14px/32px 'Unbounded', sans-serif; text-align: center; align-self: center; }
+h2 small { font-size: 13px; font-weight: 500; color: var(--muted); }
+.grid { display: grid; gap: 16px; }
+.c2 { grid-template-columns: 1fr 1fr; } .c3 { grid-template-columns: 1fr 1fr 1fr; }
+.card { background: var(--card); border-radius: 20px; padding: 20px 22px; }
+.card h3 { margin: 0 0 6px; font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+.card p { margin: 0; color: var(--ink2); font-size: 13.5px; }
+.card b { color: var(--ink); font-weight: 700; }
+.num { width: 26px; height: 26px; border-radius: 13px; background: var(--accent-soft); color: var(--accent-ink); font-size: 13px; font-weight: 800; display: grid; place-items: center; }
+.tok { padding: 1px 8px; border-radius: 10px; background: var(--card2); font-size: 12px; font-weight: 700; }
+kbd { display: inline-block; min-width: 22px; padding: 0 6px; border-radius: 6px; background: var(--card2); border: 1px solid var(--line); font: 700 12px/20px 'Pretendard', sans-serif; text-align: center; color: var(--ink); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chip { padding: 2px 12px; border-radius: 14px; background: var(--card2); border: 2px solid transparent; font-size: 12px; font-weight: 700; }
+.chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
 table { width: 100%; border-collapse: collapse; }
-td { padding: 9px 4px; border-bottom: 1px solid var(--line-soft); vertical-align: top; font-size: 13px; }
+td { padding: 9px 8px; border-bottom: 1px solid var(--line); font-size: 13.5px; vertical-align: top; }
 tr:last-child td { border-bottom: 0; }
-td:first-child { width: 128px; font-weight: 600; }
+td:first-child { width: 128px; font-weight: 700; }
 td:nth-child(2) { width: 110px; }
-td:last-child { color: var(--muted); }
-.warn { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.warn li { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px 14px 46px; position: relative; font-size: 13px; color: var(--muted); }
-.warn li::before { content: "!"; position: absolute; left: 14px; top: 14px; width: 22px; height: 22px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink); font: 600 13px/22px var(--mono); text-align: center; }
-.warn li.red { border-color: #5B2525; background: #1D1214; }
-.warn li.red::before { background: var(--danger-soft); color: var(--danger); }
-.foot { margin-top: 30px; padding-top: 16px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
-.foot .made { font: 12px var(--mono); }
+td:last-child { color: var(--ink2); }
+.warn { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.warn li { background: var(--card); border-radius: 16px; padding: 14px 16px 14px 48px; position: relative; font-size: 13px; color: var(--ink2); }
+.warn li::before { content: "!"; position: absolute; left: 16px; top: 14px; width: 22px; height: 22px; border-radius: 11px; background: var(--accent-soft); color: var(--accent-ink); font: 800 13px/22px 'Pretendard', sans-serif; text-align: center; }
+.warn li.red { background: var(--danger-soft); }
+.warn li.red::before { background: var(--danger); color: #FFFFFF; }
+.warn b { color: var(--ink); }
+.foot { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); padding-top: 8px; }
+.foot .made { font-weight: 700; }
 </style>
 </head>
 <body>
 <div class="wrap">
-
 <div class="hero">
   <img src="../app/AppIcon.png" alt="">
   <div>
-    <div class="wm">FINDE<span>ROAD</span></div>
-    <p>파일 찾기 · 미리보기 · 복사 · 이동 · 삭제를 한 창에서</p>
-    <div class="pills"><span class="pill">macOS · Apple Silicon</span><span class="pill">Mac 전체를 끝까지 찾기</span><span class="pill">확장자 여러 개</span><span class="pill">끌어서 옮기기</span><span class="pill">Quick Look</span><span class="pill">라이트 · 다크</span><span class="pill">자동 업데이트</span></div>
+    <div class="wm">Finde<span>ROAD</span></div>
+    <p>찾고 싶은 파일, 이름만 적어 보세요 — 찾기 · 미리보기 · 복사 · 이동 · 삭제를 한 창에서</p>
+    <div class="pills"><span class="pill">macOS · Apple Silicon</span><span class="pill">Mac 전체를 끝까지 찾기</span><span class="pill">확장자 여러 개</span><span class="pill">카드 · 목록 보기</span><span class="pill">끌어서 옮기기</span><span class="pill">Quick Look</span><span class="pill">라이트 · 다크</span><span class="pill">자동 업데이트</span></div>
   </div>
 </div>
+<div class="shot"><img src="guide-screen.png" alt="FindeROAD 화면"></div>
 
-<div class="road"></div>
-<div class="shot"><img src="guide-screen.png" alt="FINDEROAD 화면"></div>
-
-<h2><span class="n">01</span>설치 <small>처음 한 번만 하면 돼요</small></h2>
+<h2><span class="n">1</span>설치 <small>처음 한 번만 하면 돼요</small></h2>
 <div class="grid c3">
   <div class="card"><h3><span class="num">1</span>압축 풀기</h3><p>받은 <b>FINDEROAD.zip</b> 을 더블클릭해서 풀어요.</p></div>
   <div class="card"><h3><span class="num">2</span>응용 프로그램 폴더로</h3><p><b>FINDEROAD.app</b> 을 Finder 왼쪽의 <b>응용 프로그램</b> 폴더로 끌어다 놓아요. 그래야 자동 업데이트가 돼요.</p></div>
   <div class="card"><h3><span class="num">3</span>처음 열 때 경고가 뜨면</h3><p><b>시스템 설정 → 개인정보 보호 및 보안</b> 맨 아래에서 <b>"그래도 열기"</b> 를 눌러요. 다음부터는 바로 열려요.</p></div>
 </div>
 
-<h2><span class="n">02</span>찾기</h2>
+<h2><span class="n">2</span>찾기 <small>첫 화면에서 적기 시작하면 결과 화면으로 바뀌어요</small></h2>
 <div class="grid c2">
-  <div class="card"><h3>이름 · 확장자 칸</h3><p><b>파일 이름</b> 칸에 이름 일부를 쓰면 바로 찾아요. 띄어 쓰면 모든 낱말이 들어간 파일만 나와요.<br>
-    <b>확장자</b> 칸에 <span class="tok">hwp</span> <span class="tok">hwpx</span> 처럼 여러 개를 넣으면 함께 찾아요 (쉼표 · 띄어쓰기로 나눠요). <b>고르기</b> 를 누르면 종류별로 체크해서 고를 수 있어요.</p></div>
-  <div class="card"><h3>분류 버튼 · 여러 개 함께</h3><p>누르면 그 분류의 확장자가 더해지고, 다시 누르면 빠져요. <b>문서 + 이미지</b> 처럼 여러 개를 함께 켤 수 있어요. <b>전체</b> 는 확장자 조건을 비워요.</p>
+  <div class="card"><h3>이름 · 확장자</h3><p>큰 검색 칸에 <b>파일 이름</b> 일부를 쓰면 바로 찾아요. 띄어 쓰면 모든 낱말이 들어간 파일만 나와요.<br>
+    <b>확장자</b> 칸에 <span class="tok">hwp</span> <span class="tok">hwpx</span> 처럼 여러 개를 넣으면 함께 찾아요(쉼표 · 띄어쓰기로 나눠요). <b>고르기 ▾</b> 를 누르면 종류별로 체크해서 골라요.</p></div>
+  <div class="card"><h3>무엇을 찾을까요? (분류)</h3><p>누르면 그 분류의 확장자가 더해지고, 다시 누르면 빠져요. 여러 개를 함께 켤 수 있어요. <b>전체</b> 는 확장자 조건을 비워요. <b>직접 고르기</b> 는 확장자 고르기 창을 열어요.</p>
     <div class="chips"><span class="chip">전체</span><span class="chip">동영상</span><span class="chip on">이미지</span><span class="chip on">문서</span><span class="chip">음악</span><span class="chip">압축</span><span class="chip">코드</span></div></div>
-  <div class="card"><h3>검색 범위</h3><p><b>Mac 전체</b>: Spotlight 로 먼저 빠르게 보여 주고, 그동안 폴더를 끝까지 직접 살펴 빠진 파일을 채워요. 찾는 동안 위에 진행 막대가 보이고 <b>그만 찾기</b>(<kbd>Esc</kbd>) 로 멈출 수 있어요.<br>
-    <b>선택한 폴더</b>: <b>폴더 추가</b> 를 누르거나 Finder 에서 폴더를 창으로 끌어다 놓으면 여러 폴더를 함께 찾아요.</p></div>
-  <div class="card"><h3>정렬 · 숨김 파일</h3><p>이름으로 찾으면 <b>정확도순</b>: 이름이 똑같은 파일(<b>이름 일치</b> 표시)부터 보여 줘요. 표 위쪽의 <b>이름 · 위치 · 크기 · 수정일</b> 을 누르면 정렬이 바뀌어요.<br>
-    숨김 파일이나 라이브러리 폴더까지 찾으려면 왼쪽의 <b>숨김 · 시스템 파일도 찾기</b> 를 켜요.</p></div>
-  <div class="card"><h3>끌어서 옮기기</h3><p>결과에서 파일을 골라 <b>끌어서</b> Finder 창 · 데스크탑에 놓으면 옮겨져요 (다른 디스크로는 복사, <kbd>⌥</kbd> 를 누르면 복사).<br>
-    왼쪽 <b>보낼 곳</b> 이나 결과 속 폴더 위에 놓아도 돼요. 놓기 전에 <kbd>⌥</kbd> 를 누르고 있으면 복사해요.</p></div>
-  <div class="card"><h3>보낼 곳</h3><p>자주 옮기는 폴더를 <b>보낼 곳 추가</b> 로 넣어 두세요 (Finder 에서 폴더를 그 자리에 끌어다 놓아도 돼요).<br>
-    보낼 곳을 누르면 <b>고른 파일을 여기로 이동 · 복사</b> 메뉴가 떠요. 옮긴 뒤 알림의 <b>되돌리기</b> 로 원래대로.</p></div>
+  <div class="card"><h3>어디서 찾을까요? (검색 범위)</h3><p><b>Mac 전체</b>: Spotlight 로 먼저 빠르게 보여 주고, 그동안 폴더를 끝까지 직접 살펴 빠진 파일을 채워요. 찾는 동안 진행 막대가 보이고 <b>그만 찾기</b>(<kbd>Esc</kbd>) 로 멈춰요.<br>
+    <b>선택한 폴더</b>: 폴더를 추가하거나 Finder 에서 창으로 끌어다 놓으면 여러 폴더를 함께 찾아요. 결과 화면에서는 검색 칸 오른쪽 <b>범위 ▾</b> 에서 바꿔요.</p></div>
+  <div class="card"><h3>카드 · 목록 · 정렬</h3><p>결과는 <b>카드</b>(그림으로 크게) 또는 <b>목록</b>(표)으로 볼 수 있고, 고른 보기는 기억해요.<br>
+    이름으로 찾으면 <b>정확도순</b>: 이름이 똑같은 파일(<b>이름 일치</b> 표시)부터 보여 줘요. 목록에서는 표 머리, 카드에서는 <b>정렬 ▾</b> 로 이름 · 위치 · 크기 · 수정일 순서를 바꿔요.</p></div>
+  <div class="card"><h3>끌어서 옮기기 · 보낼 곳</h3><p>결과를 <b>끌어서</b> Finder 창 · 데스크탑에 놓으면 옮겨져요(다른 디스크로는 복사, <kbd>⌥</kbd> 는 복사).<br>
+    화면 아래 <b>여기로 끌어다 놓기</b> 에 자주 쓰는 폴더를 <b>＋</b> 로 넣어 두면, 끌어다 놓거나 눌러서 바로 옮기거나 복사해요.</p></div>
+  <div class="card"><h3>숨김 파일 · 단축키</h3><p>숨김 파일이나 라이브러리 폴더까지 찾으려면 검색 범위의 <b>숨김 · 시스템 파일도 찾기</b> 를 켜요.<br>
+    오른쪽 위 <b>?</b> 를 누르면 모든 단축키를 한눈에 볼 수 있어요.</p></div>
 </div>
 
-<h2><span class="n">03</span>미리보기 · 파일 작업 <small>여러 개는 ⌘ 또는 ⇧ 를 누른 채 클릭 · 오른쪽 클릭하면 메뉴</small></h2>
+<h2><span class="n">3</span>미리보기 · 파일 작업 <small>여러 개는 ⌘ 또는 ⇧ 를 누른 채 클릭 · 오른쪽 클릭하면 메뉴</small></h2>
 <div class="card">
 <table>
   <tr><td>미리보기</td><td><kbd>Space</kbd></td><td>오른쪽 칸에 이미지 · 동영상 · 음악 · 글이 바로 보여요. Space 를 누르면 Quick Look 으로 크게 봐요.</td></tr>
-  <tr><td>열기</td><td><kbd>Enter</kbd></td><td>더블클릭해도 열려요. <kbd>⌘R</kbd> 은 Finder 에서 위치 보기.</td></tr>
-  <tr><td>복사</td><td><kbd>⌘C</kbd></td><td>Finder 에서 <kbd>⌘V</kbd> 로 바로 붙여넣을 수도 있어요.</td></tr>
-  <tr><td>붙여넣기</td><td><kbd>⌘V</kbd></td><td>넣을 폴더를 고르는 창이 떠요. Finder 에서 복사한 파일도 붙여넣을 수 있어요.</td></tr>
+  <tr><td>열기</td><td><kbd>Enter</kbd></td><td>두 번 눌러도 열려요. <kbd>⌘R</kbd> 은 Finder 에서 위치 보기.</td></tr>
+  <tr><td>복사 · 붙여넣기</td><td><kbd>⌘C</kbd> <kbd>⌘V</kbd></td><td>Finder 에서 <kbd>⌘V</kbd> 로 바로 붙여넣을 수도 있어요. 붙여넣기는 넣을 폴더를 고르는 창이 떠요.</td></tr>
   <tr><td>이동</td><td><kbd>⌘⇧M</kbd></td><td>옮길 폴더를 고르면 옮겨져요.</td></tr>
   <tr><td>휴지통으로</td><td><kbd>⌘⌫</kbd></td><td>맥의 휴지통으로 옮겨요. 실수했다면 <kbd>⌘Z</kbd> 또는 알림의 '되돌리기'.</td></tr>
   <tr><td>즉시 삭제</td><td><kbd>⌘⌥⌫</kbd></td><td>확인 창에서 <b>영구 삭제</b> 를 누르면 휴지통을 거치지 않고 바로 지워요.</td></tr>
-  <tr><td>되돌리기</td><td><kbd>⌘Z</kbd></td><td>바로 앞의 붙여넣기 · 이동 · 휴지통 작업을 되돌려요.</td></tr>
-  <tr><td>이전 검색으로</td><td><kbd>⌫</kbd></td><td>바로 전에 찾던 검색으로 돌아가요 (<kbd>⌘[</kbd> 도 같아요). 글 칸에서는 글자만 지워요.</td></tr>
+  <tr><td>이전 검색으로</td><td><kbd>⌫</kbd> <kbd>⌘[</kbd></td><td>바로 전에 찾던 검색으로 돌아가요. 첫 검색에서 누르면 첫 화면으로. 글 칸에서는 글자만 지워요. 맨 위 <b>‹</b> 단추도 같아요.</td></tr>
 </table>
 </div>
 
-<h2><span class="n">04</span>꼭 알아 두세요</h2>
+<h2><span class="n">4</span>꼭 알아 두세요</h2>
 <ul class="warn">
   <li class="red"><b>즉시 삭제는 되돌릴 수 없어요.</b> 휴지통에도 남지 않아요. 확인 창의 파일 목록을 꼭 확인하세요. 평소에는 휴지통으로(⌘⌫)를 쓰세요.</li>
   <li><b>되돌리기는 바로 앞의 작업 하나만</b> 돼요. 앱을 다시 열면 되돌릴 수 없어요. Finder 에 끌어다 놓은 것은 Finder 에서 <kbd>⌘Z</kbd> 로 되돌려요.</li>
@@ -123,10 +110,9 @@ td:last-child { color: var(--muted); }
   <li><b>데스크탑 · 문서 · 다운로드 폴더</b> 를 처음 찾을 때 접근을 허용할지 물어요. <b>허용</b> 을 눌러 주세요. 업데이트 뒤에 다시 물을 수도 있어요.</li>
   <li><b>시스템 폴더와 맥의 기본 폴더</b>(문서 · 데스크탑 등) 자체는 실수로 옮기거나 지우지 않도록 막아 두었어요. 그 안의 파일은 괜찮아요.</li>
   <li><b>창을 닫아도 앱은 Dock 에 남아요.</b> 완전히 끄려면 <kbd>⌘Q</kbd>. 함께 돌던 엔진도 같이 꺼져요.</li>
-  <li><b>자동 업데이트</b> 는 앱을 응용 프로그램 폴더에서 열었을 때만 돼요. 오른쪽 위 <b>업데이트 확인</b> 에서 버전 확인 · 직접 업데이트 · 자동 업데이트 켜고 끄기를 할 수 있어요.</li>
+  <li><b>자동 업데이트</b> 는 앱을 응용 프로그램 폴더에서 열었을 때만 돼요. 오른쪽 위 <b>업데이트 확인</b> 에서 버전 확인 · 직접 업데이트 · 자동 업데이트 켜고 끄기를 해요.</li>
 </ul>
-
-<div class="foot"><span>FINDEROAD 사용 가이드 · 화면 모드는 오른쪽 위에서 시스템 / 라이트 / 다크</span><span class="made">made by. Nevertheless_D</span></div>
+<div class="foot"><span>FindeROAD 사용 가이드 · 화면 모드는 오른쪽 위에서 시스템 / 라이트 / 다크</span><span class="made">made by. Nevertheless_D</span></div>
 </div>
 </body>
 </html>

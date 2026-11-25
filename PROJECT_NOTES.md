@@ -11,6 +11,27 @@
 
 ## 진행 사항
 
+- **2026-11-25 v2.0.0 새 디자인 "초록 서랍" · 이름 FindeROAD (사용자 요청, 디자인 캔버스 "FINDEROAD 2.0 디자인 시안"의 E 확정)**
+  - 도로 느낌(밤의 고속도로 · 차선 점선 · 호박색)을 모두 빼고 "Finder 를 대신하는 파일 찾기 앱"이 주인공이 되게. YTROAD 의 형제처럼
+    색 하나(초록 #0B8A5F / 다크 #34D399), 아주 큰 제목, 그림, 큼직한 선택 카드. 글꼴 **Pretendard**(본문, OFL) + **Unbounded 800**(로고, OFL),
+    `engine/web/fonts/fonts.css` 하나로. Gothic A1 · Orbit · IBM Plex Mono 는 뺌.
+  - 화면 이름은 **FindeROAD**(창 제목 · 메뉴 · Info.plist CFBundleName/DisplayName). 앱 파일 · 실행 파일 · 지원 폴더 · 번들 ID · 업데이트 주소는
+    그대로 FINDEROAD (업데이트 · 시험 · AppleScript 가 그대로 돌게).
+  - 아이콘: 초록 바탕, 열린 서랍에서 파일 카드 한 장이 나온 그림(app/AppIcon.svg → scripts/icon.py).
+  - 화면 두 상태: **첫 화면**(body.mode-start: 서랍 그림 + "찾고 싶은 파일, 이름만 적어 보세요" + 큰 검색 칸 + "어디서 찾을까요?" 카드 +
+    "무엇을 찾을까요?" 분류 4×2 칸, 8번째 칸 = 직접 고르기) ↔ **결과 화면**(body.mode-results: 얇은 검색 막대 · 분류 알약 · 진행 표시 ·
+    결과 · 아래 "여기로 끌어다 놓기"(보낼 곳) · 오른쪽 미리보기). 검색이 시작되면 결과 화면, 결과를 지우면(검색어 비움 등) 첫 화면.
+    같은 DOM(id 그대로)을 CSS 로 옮기는 방식이라 기존 기능 · 맥 자체 시험의 선택자가 그대로 맞아요.
+  - 결과 **카드 / 목록** 보기(설정 ui.view 에 기억). 카드: 종류별 그림 + 그림 · 동영상 · 문서는 Quick Look 썸네일(/api/thumb, 보일 때만),
+    ← → 한 칸, ↑ ↓ 한 줄. 카드에서는 '정렬 ▾' 메뉴, 목록에서는 표 머리로 정렬.
+  - 검색 범위는 결과 화면에서 검색 막대의 '범위 ▾' 아래 떠 있는 카드(같은 #scopeCard). 왼쪽 막대 · 사이드바 단축키 목록은 없어지고
+    맨 위 **?** 단추 = 단축키 창(12개), 맨 위 **‹** 단추 = 이전 검색(⌫ 와 같음).
+  - **⌫ 규칙 보완**(road-mac-app 두 갈래 규칙): 지나온 검색이 없을 때 ⌫ = 첫 화면으로(검색어 · 확장자 비움). 첫 화면에서는 아무 일도 안 함.
+    범위 창 · 단축키 창 · 확장자 창 · 메뉴 · 확인 창이 열려 있으면 ⌫ 는 건드리지 않음.
+  - 결과가 없을 때 같은 말이 두 번 나오던 것 고침(아래 줄은 '찾기를 마쳤어요 · n초').
+  - 가이드 이미지 · guide-screen.png 를 새 디자인으로 다시 만듦. 리눅스 Playwright 로 첫 화면 · 결과(카드 · 목록) · 범위 창 · 확장자 창 ·
+    단축키 창 · 결과 없음 · 우클릭 메뉴 · 즉시 삭제 확인 · 가장 작은 창(1040×640) · 라이트/다크 확인, ⌫ · 방향키 · 정렬 · 보기 기억 시험 통과.
+
 - **2026-11-23 v1.1.0 새 디자인 · 확장자 고르기 · 끌어서 옮기기 (사용자 요청, 시안 B 확정)**
   - 디자인: 디자인 캔버스 "FINDEROAD 1.1 디자인 시안"의 **B · 밤의 고속도로**. 다크 #0D1016 바탕 + 호박색 #FFB020(라이트는 #B45309) · 주황 #FF7A1A
     그라데이션(진행 막대), 위쪽 막대 아래 차선 점선, 왼쪽 막대 경계도 점선. 글꼴 **Gothic A1**(본문, OFL) + **Orbit**(로고 · 제목, OFL) + IBM Plex Mono(숫자 · 경로),
@@ -91,7 +112,7 @@ engine/                Go 엔진(표준 라이브러리만). 화면(web/)을 내
   preview.go           파일 내보내기(동영상 · 음악 · 이미지), Quick Look 썸네일(qlmanage), 글 미리보기
   hangul.go            한글 NFC/NFD 변환
   update.go            자동 업데이트(releases/latest.json)
-  web/                 index.html · css · js · fonts(Gothic A1 · Orbit · IBM Plex Mono)
+  web/                 index.html · css · js · fonts(Pretendard · Unbounded, fonts.css)
 scripts/               build-mac.sh · smoke-mac.sh · ci-mac.sh · release.sh · feed.py · guide.py · icon.py
 releases/              FINDEROAD-x.y.z.zip · latest.json
 docs/                  사용 가이드 이미지와 원본(guide.html · guide-screen.png). 고친 뒤 scripts/guide.py
@@ -116,6 +137,7 @@ chooseFolders · trash · pbWriteFiles · pbReadFiles · pbWriteText · quickloo
 
 ## 결정 사항
 
+- **디자인(2.0, 초록 서랍)**: 색 · 글꼴 · 간격 · 모서리는 `engine/web/css/app.css` 맨 위 변수에서만. 초록 #0B8A5F(라이트) / #34D399(다크), 바탕 #F3F7F4 / #0D110F, 카드 #FFFFFF / #151B17. 글자 12 · 13 · 15 · 18(+ 첫 화면 제목 42), 모서리 10 · 16 · 24 + 알약. 종류 색: 동영상 빨강 · 이미지 초록 · 문서 파랑 · 음악 보라 · 압축 주황 · 코드 회색. 앱 이름 표기는 **FindeROAD**. 시안 원본: 디자인 캔버스 "FINDEROAD 2.0 디자인 시안"(2차 페이지 E).
 - **GitHub 에는 늘 최신판 zip 1개만**: 업데이트를 내보낼 때마다 `scripts/publish-download.sh` 가 앱 + 가이드 zip 을 `download/` 에 정해진 이름으로 바꿔 넣고 다른 파일은 지워요(release.sh 가 자동으로 불러요. GitHub 릴리스 페이지는 이 작업 환경에서 만들 수 없어 저장소 폴더를 써요). `releases/` 의 업데이트용 zip 도 현재 버전만 남겨요 — 설치된 앱은 latest.json 이 가리키는 zip 만 받고, '되돌리기'는 맥 안의 백업을 써서 예전 zip 이 필요 없어요.
 - 방식: MSROAD 1.1.0 과 같은 **Dock 에 보이는 정식 맥 앱**. 본체는 Swift 껍데기, 화면은 앱 자체 창(WKWebView), Chrome 안 씀.
   엔진(Go)은 앱의 **자식으로만**, 앱이 켜져 있는 동안만 돈다. ⌘Q 하면 엔진도 끈다. 앱이 강제로 꺼져도 엔진은 스스로 끝난다.
