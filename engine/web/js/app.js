@@ -215,6 +215,14 @@ $('#themeSeg').addEventListener('click', (e) => {
   saveSettings({ appearance: S.appearance });
 });
 
+// 받침에 따라 '을/를'을 골라요(한글로 끝나지 않으면 '을(를)' 그대로)
+function eul(w) {
+  const t = String(w).replace(/[’'")\]\s]+$/, '');
+  const c = t.charCodeAt(t.length - 1) - 0xAC00;
+  if (c >= 0 && c <= 11171) return w + (c % 28 ? '을' : '를');
+  const d = '013678'.includes(t.slice(-1)) ? '을' : '2459'.includes(t.slice(-1)) ? '를' : '';
+  return w + (d || '을(를)');
+}
 function saveSettings(patch) { api('/api/settings', patch).catch((e) => toast(e.message, { err: true })); }
 
 // ---------------------------------------------------------------- 검색 범위
@@ -339,7 +347,7 @@ function addDestPaths(paths) {
   if (!added) { setStatus('이미 보낼 곳에 있어요'); return; }
   renderDests();
   saveDests();
-  setStatus(added === 1 ? `‘${basename(paths[paths.length - 1])}’을(를) 보낼 곳에 넣었어요 · 결과를 끌어다 놓으면 옮겨져요` : `보낼 곳 ${added}개를 넣었어요`);
+  setStatus(added === 1 ? `${eul(`‘${basename(paths[paths.length - 1])}’`)} 보낼 곳에 넣었어요 · 결과를 끌어다 놓으면 옮겨져요` : `보낼 곳 ${added}개를 넣었어요`);
 }
 $('#addDest').addEventListener('click', async () => {
   const paths = await chooseFolders({ prompt: '결과를 보낼 폴더를 골라 주세요 (여러 개 고를 수 있어요)', button: '보낼 곳에 넣기', multiple: true });
@@ -351,7 +359,7 @@ $('#dests').addEventListener('click', (e) => {
     const d = S.dests.splice(+rm.dataset.rmdest, 1)[0];
     renderDests();
     saveDests();
-    setStatus(`‘${d.name}’을(를) 보낼 곳에서 뺐어요`);
+    setStatus(`${eul(`‘${d.name}’`)} 보낼 곳에서 뺐어요`);
     return;
   }
   const el = e.target.closest('[data-dest]');
@@ -793,6 +801,7 @@ async function runSearch(opts = {}) {
   stopPolling();
   const ctl = searchCtl = new AbortController();
   const seq = ++searchSeq;
+  thumbs.stop();
   S.searching = true;
   document.body.classList.add('searching');
   $('#loading').hidden = false;
@@ -809,6 +818,7 @@ async function runSearch(opts = {}) {
     S.searching = false;
     document.body.classList.remove('searching');
     $('#loading').hidden = true;
+    thumbs.observe();
     renderProg();
     renderEmpty();
     renderToolbar();
@@ -883,25 +893,78 @@ $('.thead').addEventListener('click', (e) => {
 
 const tbody = $('#tbody');
 
-// 카드 보기의 그림: 종류별 그림 위에, 그림 · 동영상 · 문서는 Quick Look 썸네일을 덮어요 (화면에 보일 때만 불러요)
-const THUMB_ART = {
-  doc: '<svg aria-hidden="true" viewBox="0 0 64 64"><rect x="15" y="6" width="34" height="46" rx="5" fill="#FFFFFF"/><rect x="21" y="14" width="16" height="4" rx="2" fill="var(--k-doc-i)"/><rect x="21" y="23" width="22" height="3" rx="1.5" fill="#D5DDE8"/><rect x="21" y="30" width="22" height="3" rx="1.5" fill="#D5DDE8"/><rect x="21" y="37" width="14" height="3" rx="1.5" fill="#D5DDE8"/></svg>',
-  video: '<svg aria-hidden="true" viewBox="0 0 64 64"><rect x="4" y="14" width="56" height="34" rx="7" fill="#1B1F2A"/><circle cx="32" cy="31" r="9" fill="var(--k-video-i)"/><path d="M29.5 26.5v9l7-4.5z" fill="#FFFFFF"/></svg>',
-  image: '<svg aria-hidden="true" viewBox="0 0 64 64"><rect x="4" y="12" width="56" height="40" rx="6" fill="#BDE6DA"/><circle cx="46" cy="24" r="5" fill="#FFD43B"/><path d="M4 52 22 31l12 13 8-7 18 15z" fill="var(--k-image-i)"/></svg>',
-  audio: '<svg aria-hidden="true" viewBox="0 0 64 64"><circle cx="32" cy="32" r="22" fill="var(--k-audio-i)"/><path d="M28 40V22l12-3v17" stroke="#FFFFFF" stroke-width="3.5" fill="none" stroke-linecap="round"/><circle cx="25" cy="40" r="4" fill="#FFFFFF"/><circle cx="37" cy="37" r="4" fill="#FFFFFF"/></svg>',
-  archive: '<svg aria-hidden="true" viewBox="0 0 64 64"><rect x="10" y="18" width="44" height="36" rx="6" fill="var(--k-archive-i)"/><rect x="10" y="10" width="44" height="12" rx="5" fill="#FF922B"/><path d="M32 22v20" stroke="#FFFFFF" stroke-width="3" stroke-dasharray="3 3"/></svg>',
-  code: '<svg aria-hidden="true" viewBox="0 0 64 64"><rect x="8" y="12" width="48" height="40" rx="7" fill="#2B3036"/><path d="M24 25l-7 7 7 7M40 25l7 7-7 7" stroke="#FFFFFF" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  folder: '<svg aria-hidden="true" viewBox="0 0 64 64"><path d="M6 18a5 5 0 0 1 5-5h14l5 6h23a5 5 0 0 1 5 5v24a5 5 0 0 1-5 5H11a5 5 0 0 1-5-5z" fill="var(--k-folder-i)"/></svg>',
-};
+// 카드 보기의 그림: 종류별 그림(index.html 의 #art-… 기호) 위에, 그림 · 동영상 · 문서는 Quick Look 썸네일을 덮어요.
+// 썸네일은 맥이 한 번에 2개씩만 만들어서, 화면이 한꺼번에 많이 부르면 '그만 찾기' · 결과 받기 요청까지 줄을 서요(2.0.0 의 버그).
+// 그래서 ① 찾는 동안은 부르지 않고 ② 화면에 보이는 카드만 ③ 한 번에 2개씩 ④ 받은 것은 기억해 두고 다시 그릴 때 그대로 써요.
 const THUMB_KIND = { doc: 'doc', video: 'video', image: 'image', audio: 'audio', archive: 'archive', code: 'code', app: 'code', folder: 'folder' };
 const THUMB_EXT = new Set('pdf key pages numbers docx doc pptx ppt xlsx xls hwp hwpx'.split(' '));
+const wantThumb = (it) => !it.isDir && (it.kind === 'image' || it.kind === 'video' || THUMB_EXT.has(it.ext || ''));
 function thumbHTML(it, i) {
   const k = it.isDir && it.kind === 'folder' ? 'folder' : (THUMB_KIND[it.kind] || 'code');
   const e = it.isDir && it.kind === 'folder' ? '폴더' : (it.ext || '?').toUpperCase().slice(0, 5);
-  const want = i < 400 && !it.isDir && (it.kind === 'image' || it.kind === 'video' || THUMB_EXT.has(it.ext || ''));
-  const img = want ? `<img alt="" loading="lazy" decoding="async" src="${thumbURL(it.path, 320)}" onerror="this.remove()">` : '';
-  return `<span class="thumb k-${k}">${THUMB_ART[k]}${img}<span class="xb">${esc(e)}</span></span>`;
+  const got = thumbs.cache.get(it.path);
+  const img = got && got !== 'x' ? `<img alt="" src="${got}">` : '';
+  const want = !got && wantThumb(it) ? ` data-thumb="${i}"` : '';
+  return `<span class="thumb k-${k}"${want}><svg aria-hidden="true" viewBox="0 0 64 64"><use href="#art-${k}"/></svg>${img}<span class="xb">${esc(e)}</span></span>`;
 }
+const thumbs = {
+  cache: new Map(),   // 경로 → 그림 주소(blob:) 또는 'x'(만들 수 없음)
+  queue: [], busy: 0, ctl: new Set(), io: null,
+  observe() {
+    if (!this.io) {
+      this.io = new IntersectionObserver((ents) => {
+        for (const en of ents) {
+          if (!en.isIntersecting) continue;
+          this.io.unobserve(en.target);
+          this.queue.push(en.target);
+        }
+        this.pump();
+      }, { root: tbody, rootMargin: '200px 0px' });
+    }
+    this.io.disconnect();
+    this.queue = [];
+    if (S.view !== 'cards' || S.searching) return;
+    tbody.querySelectorAll('[data-thumb]').forEach((el) => this.io.observe(el));
+  },
+  pump() {
+    while (this.busy < 2 && this.queue.length && !S.searching) {
+      const el = this.queue.shift();
+      if (!el.isConnected) continue;
+      const it = S.items[+el.dataset.thumb];
+      if (!it || this.cache.has(it.path)) continue;
+      this.load(el, it);
+    }
+  },
+  async load(el, it) {
+    this.busy++;
+    const ctl = new AbortController();
+    this.ctl.add(ctl);
+    try {
+      const r = await fetch(thumbURL(it.path, 320), { signal: ctl.signal });
+      if (!r.ok) throw new Error(String(r.status));
+      const url = URL.createObjectURL(await r.blob());
+      this.cache.set(it.path, url);
+      if (this.cache.size > 600) { // 오래된 것부터 정리
+        const [old, u] = this.cache.entries().next().value;
+        if (u !== 'x') URL.revokeObjectURL(u);
+        this.cache.delete(old);
+      }
+      if (el.isConnected) { const img = new Image(); img.alt = ''; img.src = url; el.insertBefore(img, el.querySelector('.xb')); el.removeAttribute('data-thumb'); }
+    } catch (e) {
+      if (e.name !== 'AbortError') this.cache.set(it.path, 'x');
+    } finally {
+      this.ctl.delete(ctl);
+      this.busy--;
+      this.pump();
+    }
+  },
+  stop() { // 새 검색을 시작하면 기다리던 썸네일 요청은 모두 그만둬요
+    for (const c of this.ctl) c.abort();
+    this.ctl.clear();
+    this.queue = [];
+    if (this.io) this.io.disconnect();
+  },
+};
 
 function renderTable() {
   const cards = S.view === 'cards';
@@ -917,6 +980,7 @@ function renderTable() {
   });
   markCursor();
   renderEmpty();
+  thumbs.observe();
 }
 
 function renderEmpty() {
@@ -1217,8 +1281,8 @@ async function trashSel() {
     removeItems(items.map((m) => m.from));
     S.undo = { type: 'trash', items, label: '휴지통으로 이동' };
     const what = items.length === 1 ? `‘${basename(items[0].from)}’` : `${items.length}개`;
-    reportErrors(r, `${what}을(를) 휴지통으로 옮겼어요 · ⌘Z 로 되돌리기`);
-    if (!(r.errors || []).length) toast(`${what}을(를) 휴지통으로 옮겼어요`, { action: '되돌리기', onAction: undo });
+    reportErrors(r, `${eul(what)} 휴지통으로 옮겼어요 · ⌘Z 로 되돌리기`);
+    if (!(r.errors || []).length) toast(`${eul(what)} 휴지통으로 옮겼어요`, { action: '되돌리기', onAction: undo });
   } else {
     reportErrors(r);
   }
@@ -1229,7 +1293,7 @@ async function deleteSel() {
   if (!items.length) return;
   const names = items.map((i) => i.name + (i.isDir ? '/' : ''));
   const ok = await confirmDialog({
-    title: items.length === 1 ? `‘${items[0].name}’을(를) 바로 지울까요?` : `${items.length}개를 바로 지울까요?`,
+    title: items.length === 1 ? `${eul(`‘${items[0].name}’`)} 바로 지울까요?` : `${items.length}개를 바로 지울까요?`,
     text: '휴지통을 거치지 않고 바로 지워서 되돌릴 수 없어요.' + (items.some((i) => i.isDir) ? '\n폴더는 안에 든 파일까지 모두 지워져요.' : ''),
     list: names.slice(0, 50).concat(names.length > 50 ? [`… 외 ${names.length - 50}개`] : []),
     yes: '영구 삭제',
@@ -1252,7 +1316,7 @@ async function undo() {
   try {
     if (u.type === 'trash' || u.type === 'move') {
       const r = await api('/api/move-back', { items: u.items });
-      reportErrors(r, `${u.label}을(를) 되돌렸어요`);
+      reportErrors(r, `${eul(u.label)} 되돌렸어요`);
     } else if (u.type === 'paste') {
       const paths = u.items.map((m) => m.to);
       const r = NATIVE ? await native('trash', { paths }) : await api('/api/trash', { paths });
@@ -1266,7 +1330,7 @@ async function undo() {
 function openItems(paths) {
   if (!paths.length) return;
   api('/api/open', { paths }).catch((e) => toast(e.message, { err: true }));
-  setStatus(paths.length === 1 ? `‘${basename(paths[0])}’을(를) 여는 중` : `${paths.length}개를 여는 중`);
+  setStatus(paths.length === 1 ? `${eul(`‘${basename(paths[0])}’`)} 여는 중` : `${paths.length}개를 여는 중`);
 }
 function revealItems(paths) {
   if (!paths.length) return;

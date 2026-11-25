@@ -197,6 +197,24 @@ func (a *App) handleThumb(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", 404)
 		return
 	}
+	// 시험용(리눅스): 맥의 Quick Look 처럼 한 번에 2개씩, 오래 걸리는 썸네일을 흉내 내요
+	if ms, _ := strconv.Atoi(env("TEST_THUMB_MS")); ms > 0 {
+		select {
+		case a.thumbs.sem <- struct{}{}:
+		case <-r.Context().Done():
+			return
+		}
+		defer func() { <-a.thumbs.sem }()
+		select {
+		case <-time.After(time.Duration(ms) * time.Millisecond):
+		case <-r.Context().Done():
+			return
+		}
+		b, _ := webFiles.ReadFile("web/icon.png")
+		w.Header().Set("Content-Type", "image/png")
+		w.Write(b)
+		return
+	}
 	if runtime.GOOS != "darwin" {
 		http.Error(w, "no quick look", 404)
 		return
