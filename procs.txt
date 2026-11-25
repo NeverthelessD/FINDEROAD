@@ -1,0 +1,7 @@
+--- A 실행 중
+ 2954     1 S    /Applications/FINDEROAD.app/Contents/MacOS/FINDEROAD
+ 2965  2954 S    /Applications/FINDEROAD.app/Contents/Resources/finderoad-engine
+--- G 종료 뒤
+--- H 실행 중
+ 4544     1 S    /Applications/FINDEROAD.app/Contents/MacOS/FINDEROAD
+ 4577  4544 S    /Applications/FINDEROAD.app/Contents/Resources/finderoad-engine

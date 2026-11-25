@@ -1,0 +1,5 @@
+11-25 05:14:55 [앱 2954] 엔진 준비됨 (127.0.0.1:49176)
+11-25 05:15:08 [앱 2954] 자체 시험 결과: {"keyToPage":true,"keyRaw":"KeyC+m","version":"2.0.2","videoRows":3,"pasteboard":true,"headerClickRaw":"dark|true","headerClick":true,"drag_from":[147,341],"dragViews":2,"quicklook":true,"trash":true,"trafficLightCentered":true,"drag_to":[261,644],"trafficLightTop":18}
+11-25 05:15:22 [앱 2954] 결과 끌기 시작 1개
+11-25 05:15:28 [앱 2954] 결과를 앱 안에 놓음 1개 · 복사
+11-25 05:15:28 [앱 2954] 결과 끌기 끝: inside
