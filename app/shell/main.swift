@@ -527,11 +527,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         window.setFrameAutosaveName("FINDEROADMain")
         window.makeKeyAndOrderFront(nil)
         layoutTrafficLights()
+        relayoutTrafficLightsSoon()
+        watchTitlebar()
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// 맥이 제목 막대를 늦게 다시 그리는 경우(처음 켤 때 · 색 모드 바꿀 때)를 위해 몇 번 더 맞춰요
+    func relayoutTrafficLightsSoon() {
+        for t in [0.0, 0.05, 0.2, 0.6] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + t) { self.layoutTrafficLights() }
+        }
+    }
+
+    /// 제목 막대의 크기 · 자리가 바뀌면(맥이 다시 그리면) 곧바로 다시 가운데로
+    var titlebarObserver: NSObjectProtocol?
+    var layingOutLights = false
+    func watchTitlebar() {
+        guard titlebarObserver == nil,
+              let container = window.standardWindowButton(.closeButton)?.superview?.superview else { return }
+        container.postsFrameChangedNotifications = true
+        titlebarObserver = NotificationCenter.default.addObserver(
+            forName: NSView.frameDidChangeNotification, object: container, queue: .main) { [weak self] _ in
+            guard let self = self, !self.layingOutLights else { return }
+            DispatchQueue.main.async { self.layoutTrafficLights() }
+        }
     }
 
     /// 신호등 버튼(닫기 · 최소화 · 확대)을 화면 위쪽 막대(52pt) 가운데 높이에 맞춰요
     func layoutTrafficLights() {
+        if layingOutLights { return }
+        layingOutLights = true
+        defer { layingOutLights = false }
         guard !window.styleMask.contains(.fullScreen),
               let close = window.standardWindowButton(.closeButton),
               let mini = window.standardWindowButton(.miniaturizeButton),
@@ -634,12 +660,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         case "ready":
             pageReady = true
             replyHandler(["ok": true], nil)
-            if selftest { DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.runSelftest() } }
+            if selftest {
+                // 색 모드를 바꿔도(맥이 제목 막대를 다시 그려도) 신호등이 가운데에 남는지 함께 시험해요
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                    let before = NSApp.appearance
+                    NSApp.appearance = NSAppearance(named: .darkAqua)
+                    self.relayoutTrafficLightsSoon()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { NSApp.appearance = before; self.relayoutTrafficLightsSoon() }
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { self.runSelftest() }
+            }
 
         case "appearance":
             let mode = body["mode"] as? String ?? "system"
             NSApp.appearance = mode == "dark" ? NSAppearance(named: .darkAqua) : (mode == "light" ? NSAppearance(named: .aqua) : nil)
             if let hex = body["color"] as? String, let c = NSColor(hex: hex) { window.backgroundColor = c }
+            // 색 모드가 바뀌면 맥이 제목 막대를 다시 그리며 신호등을 원래 자리(위쪽)로 돌려놔요 → 그 뒤에 다시 가운데로
+            relayoutTrafficLightsSoon()
             replyHandler(["ok": true], nil)
 
         case "dragRegions":
