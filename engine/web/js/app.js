@@ -1,4 +1,4 @@
-// FINDEROAD 화면 — made by. Nevertheless_D
+// FindeROAD 화면 — made by. Nevertheless_D
 'use strict';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -22,16 +22,27 @@ const VIDEO_PLAY = new Set('mp4 mov m4v webm'.split(' '));
 const AUDIO_PLAY = new Set('mp3 m4a wav aac flac aif aiff'.split(' '));
 const TEXT_EXT = new Set('txt md markdown csv tsv json js mjs ts jsx tsx py go swift java kt c cpp h hpp cs html htm css scss xml yml yaml sh zsh log ini conf cfg sql rb php rs toml srt vtt'.split(' '));
 const KEYS = [
-  ['⌘F', '검색창으로'], ['Space', '미리보기 (Quick Look)'], ['⌘C', '복사'], ['⌘V', '붙여넣기'],
-  ['⌘⇧M', '이동'], ['⌘⌫', '휴지통으로'], ['⌘⌥⌫', '즉시 삭제'], ['⌘Z', '되돌리기'],
-  ['⌫', '이전 검색으로'],
+  ['⌘F', '검색 칸으로'], ['Enter', '열기'], ['Space', '미리보기 (Quick Look)'], ['⌘R', 'Finder에서 보기'],
+  ['⌘C', '복사'], ['⌘V', '붙여넣기'], ['⌘⇧M', '이동'], ['⌘⌫', '휴지통으로'],
+  ['⌘⌥⌫', '즉시 삭제'], ['⌘Z', '되돌리기'], ['⌫ · ⌘[', '이전 검색으로'], ['Esc', '그만 찾기 · 창 닫기'],
 ];
+const CAT_HINT = { all: '모든 종류', video: 'mp4 · mov · mkv …', image: 'jpg · png · heic …', doc: 'pdf · hwp · docx …', audio: 'mp3 · m4a · wav …', archive: 'zip · dmg · 7z …', code: 'swift · js · py …' };
+const CAT_ICON = {
+  all: '<svg aria-hidden="true" viewBox="0 0 16 16" class="ic"><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1"/></svg>',
+  video: '<svg aria-hidden="true" viewBox="0 0 16 16" class="ic"><path d="M5.5 3.8v8.4L12.5 8z" fill="currentColor"/></svg>',
+  image: '<svg aria-hidden="true" viewBox="0 0 16 16" class="ic"><path d="M2 12.5 6 7l3 3.5 1.8-2 3.2 4"/><circle cx="11" cy="4.5" r="1.3"/></svg>',
+  doc: '<svg aria-hidden="true" viewBox="0 0 16 16" class="ic"><path d="M4 2h5.5L12.5 5v9h-8.5z"/><path d="M6.5 8h4M6.5 10.8h4"/></svg>',
+  audio: '<svg aria-hidden="true" viewBox="0 0 16 16" class="ic"><path d="M6 12.5V3.5l7-1.5v9"/><circle cx="4.5" cy="12.5" r="1.5"/><circle cx="11.5" cy="11" r="1.5"/></svg>',
+  archive: '<svg aria-hidden="true" viewBox="0 0 16 16" class="ic"><rect x="2.5" y="5" width="11" height="8.5" rx="1.5"/><path d="M2.5 5 4 2.5h8L13.5 5M8 5v4"/></svg>',
+  code: '<svg aria-hidden="true" viewBox="0 0 16 16" class="ic"><path d="M5.5 4.5 2 8l3.5 3.5M10.5 4.5 14 8l-3.5 3.5"/></svg>',
+  pick: '<svg aria-hidden="true" viewBox="0 0 16 16" class="ic"><path d="M8 3v10M3 8h10"/></svg>',
+};
 
 const S = {
   appearance: 'system', scope: 'all', folders: [], hidden: false, autoUpdate: true, home: '', build: '',
   items: [], total: 0, capped: false, method: '', ms: 0, notes: [], searched: false, searching: false, error: '',
   sel: new Set(), anchor: null, cursor: null, sort: { key: 'mtime', dir: -1 }, sortUser: false, undo: null, update: null,
-  partial: false, dirs: 0, cur: '', hist: [], curQ: null, curLive: false, exts: [], dests: [], spot: false,
+  partial: false, dirs: 0, cur: '', hist: [], curQ: null, curLive: false, exts: [], dests: [], spot: false, view: 'cards',
 };
 
 // ---------------------------------------------------------------- 엔진 · 앱 연결
@@ -220,8 +231,26 @@ function renderScope() {
       <button type="button" class="x" data-rm="${i}" aria-label="${esc(f.name)} 폴더 빼기">${ICON_X}</button>
     </div>`).join('');
   $('#hiddenChk').checked = S.hidden;
+  $('#scopeBtnLabel').textContent = S.scope === 'all' ? 'Mac 전체' : `선택한 폴더 ${S.folders.length}`;
   renderStatusLeft();
 }
+
+// 결과 화면에서는 검색 범위 카드가 '범위 ▾' 단추 아래에 떠요
+function toggleScopePop(open) {
+  const body = document.body;
+  open = open ?? !body.classList.contains('scope-open');
+  if (open && !body.classList.contains('mode-results')) open = false;
+  body.classList.toggle('scope-open', open);
+  $('#scopeBtn').setAttribute('aria-expanded', String(open));
+  if (open) {
+    const card = $('#scopeCard');
+    const st = $('#stage').getBoundingClientRect();
+    const b = $('#scopeBtn').getBoundingClientRect();
+    card.style.top = (b.bottom - st.top + 8) + 'px';
+    card.style.left = Math.max(12, Math.min(b.right - st.left - 340, st.width - 352)) + 'px';
+  }
+}
+$('#scopeBtn').addEventListener('click', () => toggleScopePop());
 
 function setScope(scope) {
   if (S.scope === scope) return;
@@ -397,7 +426,7 @@ window.FR = {
   drop(paths, x, y) {
     if (!paths || !paths.length) return;
     const el = x != null ? document.elementFromPoint(x, y) : null;
-    if (el && el.closest('#dests, #addDest, .label-row')) addDestPaths(paths); else addFolderPaths(paths);
+    if (el && el.closest('#dock')) addDestPaths(paths); else addFolderPaths(paths);
   },
   // 이 앱의 결과를 끌고 있음: 놓을 수 있는 곳이면 true
   dragOver(x, y, copy) { const t = dropTargetAt(x, y); setHot(t, copy); return !!t; },
@@ -491,10 +520,12 @@ function renderChips() {
     const st = catState(c);
     const xs = extList(c.exts);
     const part = st === 'mixed' ? ` <small>${xs.filter((x) => extAll().includes(x)).length}/${xs.length}</small>` : '';
-    return `<button type="button" class="chip" data-cat="${c.id}" aria-pressed="${st}" title="${esc(c.exts || '확장자 조건 없이')}"><i aria-hidden="true"></i>${c.label}${part}</button>`;
-  }).join('');
+    return `<button type="button" class="chip" data-cat="${c.id}" aria-pressed="${st}" title="${esc(c.exts || '확장자 조건 없이')}"><span class="ci">${CAT_ICON[c.id]}</span>` +
+      `<span class="ct"><b>${c.label}${part}</b><span class="cx">${CAT_HINT[c.id]}</span></span></button>`;
+  }).join('') + `<button type="button" class="chip custom" data-pickext aria-haspopup="dialog"><span class="ci">${CAT_ICON.pick}</span><span class="ct"><b>직접 고르기</b><span class="cx">확장자 고르기 창</span></span></button>`;
 }
 $('#chips').addEventListener('click', (e) => {
+  if (e.target.closest('[data-pickext]')) { toggleExtPop(true); return; }
   const b = e.target.closest('[data-cat]');
   if (!b) return;
   const c = CATS.find((x) => x.id === b.dataset.cat);
@@ -615,6 +646,21 @@ function clearResults() {
   S.searching = false;
   renderTable(); renderPreview(); renderToolbar(); renderStatusLeft();
   $('#loading').hidden = true;
+  renderMode();
+}
+
+// 첫 화면(큰 검색 칸 · 분류 카드) ↔ 결과 화면(얇은 검색 막대 · 결과 · 미리보기)
+function renderMode() {
+  const start = !S.searched && !S.searching && !S.items.length && !S.error;
+  const was = document.body.classList.contains('mode-start');
+  document.body.classList.toggle('mode-start', start);
+  document.body.classList.toggle('mode-results', !start);
+  if (start) toggleScopePop(false);
+  $('#backBtn').disabled = !S.hist.length && start;
+  if (was !== start) {
+    if (!$('#extPop').hidden) placeExtPop();
+    if (NATIVE) setTimeout(reportDrag, 50);
+  }
 }
 
 const sameQ = (a, b) => a && b && a.name === b.name && a.ext === b.ext && a.scope === b.scope;
@@ -636,7 +682,17 @@ function rememberQuery(q, live) {
 
 function goBack() {
   const q = S.hist.pop();
-  if (!q) return; // 첫 검색이면 아무 일도 하지 않아요
+  if (!q) {
+    // 첫 검색에서 ⌫ = 처음 화면으로 (처음 화면이면 아무 일도 하지 않아요)
+    if (document.body.classList.contains('mode-start')) return;
+    qName.value = '';
+    setExts([], { search: false });
+    S.curQ = null; S.curLive = false;
+    clearResults();
+    setStatus('처음 화면으로 돌아왔어요');
+    qName.focus();
+    return;
+  }
   qName.value = q.name;
   setExts(extList(q.ext), { search: false });
   if (S.scope !== q.scope) {
@@ -789,7 +845,7 @@ async function runSearch(opts = {}) {
       finish();
       if (!opts.quiet) {
         const secs = (S.ms / 1000).toFixed(S.ms < 10000 ? 2 : 0);
-        setStatus(S.items.length ? `${S.total.toLocaleString()}개 찾음 · ${secs}초` + (S.notes.length ? ` · ${S.notes[0]}` : '') : (S.notes[0] || '찾은 파일이 없어요'));
+        setStatus(S.items.length ? `${S.total.toLocaleString()}개 찾음 · ${secs}초` + (S.notes.length ? ` · ${S.notes[0]}` : '') : `찾기를 마쳤어요 · ${secs}초`);
       }
       if (!S.items.length) renderPreview();
       return;
@@ -822,23 +878,36 @@ function sortItems() {
 }
 $('.thead').addEventListener('click', (e) => {
   const b = e.target.closest('[data-sort]');
-  if (!b) return;
-  const key = b.dataset.sort;
-  S.sortUser = true;
-  if (S.sort.key === key) S.sort.dir *= -1;
-  else S.sort = { key, dir: key === 'name' || key === 'dir' ? 1 : -1 };
-  const cur = S.cursor != null && S.items[S.cursor] ? S.items[S.cursor].path : null;
-  sortItems();
-  S.cursor = cur ? S.items.findIndex((i) => i.path === cur) : null;
-  S.anchor = S.cursor;
-  renderTable();
-  renderToolbar();
+  if (b) sortBy(b.dataset.sort);
 });
 
 const tbody = $('#tbody');
 
+// 카드 보기의 그림: 종류별 그림 위에, 그림 · 동영상 · 문서는 Quick Look 썸네일을 덮어요 (화면에 보일 때만 불러요)
+const THUMB_ART = {
+  doc: '<svg aria-hidden="true" viewBox="0 0 64 64"><rect x="15" y="6" width="34" height="46" rx="5" fill="#FFFFFF"/><rect x="21" y="14" width="16" height="4" rx="2" fill="var(--k-doc-i)"/><rect x="21" y="23" width="22" height="3" rx="1.5" fill="#D5DDE8"/><rect x="21" y="30" width="22" height="3" rx="1.5" fill="#D5DDE8"/><rect x="21" y="37" width="14" height="3" rx="1.5" fill="#D5DDE8"/></svg>',
+  video: '<svg aria-hidden="true" viewBox="0 0 64 64"><rect x="4" y="14" width="56" height="34" rx="7" fill="#1B1F2A"/><circle cx="32" cy="31" r="9" fill="var(--k-video-i)"/><path d="M29.5 26.5v9l7-4.5z" fill="#FFFFFF"/></svg>',
+  image: '<svg aria-hidden="true" viewBox="0 0 64 64"><rect x="4" y="12" width="56" height="40" rx="6" fill="#BDE6DA"/><circle cx="46" cy="24" r="5" fill="#FFD43B"/><path d="M4 52 22 31l12 13 8-7 18 15z" fill="var(--k-image-i)"/></svg>',
+  audio: '<svg aria-hidden="true" viewBox="0 0 64 64"><circle cx="32" cy="32" r="22" fill="var(--k-audio-i)"/><path d="M28 40V22l12-3v17" stroke="#FFFFFF" stroke-width="3.5" fill="none" stroke-linecap="round"/><circle cx="25" cy="40" r="4" fill="#FFFFFF"/><circle cx="37" cy="37" r="4" fill="#FFFFFF"/></svg>',
+  archive: '<svg aria-hidden="true" viewBox="0 0 64 64"><rect x="10" y="18" width="44" height="36" rx="6" fill="var(--k-archive-i)"/><rect x="10" y="10" width="44" height="12" rx="5" fill="#FF922B"/><path d="M32 22v20" stroke="#FFFFFF" stroke-width="3" stroke-dasharray="3 3"/></svg>',
+  code: '<svg aria-hidden="true" viewBox="0 0 64 64"><rect x="8" y="12" width="48" height="40" rx="7" fill="#2B3036"/><path d="M24 25l-7 7 7 7M40 25l7 7-7 7" stroke="#FFFFFF" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  folder: '<svg aria-hidden="true" viewBox="0 0 64 64"><path d="M6 18a5 5 0 0 1 5-5h14l5 6h23a5 5 0 0 1 5 5v24a5 5 0 0 1-5 5H11a5 5 0 0 1-5-5z" fill="var(--k-folder-i)"/></svg>',
+};
+const THUMB_KIND = { doc: 'doc', video: 'video', image: 'image', audio: 'audio', archive: 'archive', code: 'code', app: 'code', folder: 'folder' };
+const THUMB_EXT = new Set('pdf key pages numbers docx doc pptx ppt xlsx xls hwp hwpx'.split(' '));
+function thumbHTML(it, i) {
+  const k = it.isDir && it.kind === 'folder' ? 'folder' : (THUMB_KIND[it.kind] || 'code');
+  const e = it.isDir && it.kind === 'folder' ? '폴더' : (it.ext || '?').toUpperCase().slice(0, 5);
+  const want = i < 400 && !it.isDir && (it.kind === 'image' || it.kind === 'video' || THUMB_EXT.has(it.ext || ''));
+  const img = want ? `<img alt="" loading="lazy" decoding="async" src="${thumbURL(it.path, 320)}" onerror="this.remove()">` : '';
+  return `<span class="thumb k-${k}">${THUMB_ART[k]}${img}<span class="xb">${esc(e)}</span></span>`;
+}
+
 function renderTable() {
+  const cards = S.view === 'cards';
+  $('#table').classList.toggle('cards', cards);
   tbody.innerHTML = S.items.map((it, i) => `<div class="row" role="option" id="r${i}" data-i="${i}" aria-selected="${S.sel.has(it.path)}" title="${esc(it.path)}">` +
+    (cards ? thumbHTML(it, i) : '') +
     `<span class="c-name">${tileHTML(it)}<span class="nm">${esc(it.name)}</span>${it.score >= 1000 ? '<span class="exact">이름 일치</span>' : ''}</span>` +
     `<span class="c-dir">${esc(it.dir)}</span><span class="c-size">${it.isDir ? '—' : fmtSize(it.size)}</span>` +
     `<span class="c-date">${fmtDate(it.mtime)}</span></div>`).join('');
@@ -855,17 +924,53 @@ function renderEmpty() {
   if (S.items.length) { el.hidden = true; return; }
   el.hidden = false;
   if (S.searching) {
-    el.innerHTML = `<b>찾는 중…</b><span>${S.dirs ? `폴더 ${S.dirs.toLocaleString()}개 확인` : 'Spotlight 에 묻고, 폴더도 직접 살펴보는 중이에요'}</span>`;
+    el.innerHTML = `${EMPTY_ART}<b>찾는 중…</b><span>${S.dirs ? `폴더 ${S.dirs.toLocaleString()}개 확인` : 'Spotlight 에 묻고, 폴더도 직접 살펴보는 중이에요'}</span>`;
   } else if (S.error) {
-    el.innerHTML = `<b>${esc(S.error)}</b>`;
+    el.innerHTML = `${EMPTY_ART}<b>${esc(S.error)}</b>`;
   } else if (S.searched) {
-    el.innerHTML = '<b>조건에 맞는 파일이 없어요</b><span>확장자나 검색 범위를 바꿔 보세요</span>' + (S.notes.length ? `<span>${esc(S.notes[0])}</span>` : '');
+    el.innerHTML = `${EMPTY_ART}<b>조건에 맞는 파일이 없어요</b><span>이름을 조금 짧게 적거나, 확장자 · 분류 · 검색 범위를 바꿔 보세요</span>` + (S.notes.length ? `<span>${esc(S.notes[0])}</span>` : '');
   } else {
-    el.innerHTML = '<b>무엇을 찾을까요?</b><div class="tips">' +
-      '<span>파일 이름을 쓰거나, 확장자 칸에 <code>mp4</code> 처럼 확장자만 써도 돼요</span>' +
-      '<span>분류 버튼을 누르면 확장자가 자동으로 채워져요</span>' +
-      '<span>입력하면 바로 찾아요 · Enter 로 다시 찾기</span></div>';
+    el.innerHTML = '';
   }
+  renderMode();
+}
+const EMPTY_ART = '<svg aria-hidden="true" width="150" height="110" viewBox="0 0 150 110"><path d="M14 52h122v42a10 10 0 0 1-10 10H24a10 10 0 0 1-10-10z" style="fill:var(--card2);stroke:var(--line2)" stroke-width="2"/><rect x="58" y="70" width="34" height="9" rx="4.5" style="fill:var(--line2)"/><circle cx="96" cy="30" r="17" fill="none" style="stroke:var(--accent)" stroke-width="7"/><path d="M108 42l12 12" style="stroke:var(--accent)" stroke-width="8" stroke-linecap="round"/></svg>';
+
+// 카드 · 목록 보기 (설정에 기억해요)
+function setView(v) {
+  if (v !== 'cards' && v !== 'list') return;
+  S.view = v;
+  $$('#viewSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === v)));
+  renderTable();
+  scrollToCursor();
+}
+$('#viewSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-view]');
+  if (!b || b.dataset.view === S.view) return;
+  setView(b.dataset.view);
+  saveSettings({ ui: { view: S.view } });
+});
+// 카드 보기에서는 표 머리가 없어서 '정렬 ▾' 로 골라요 (같은 것을 다시 고르면 순서가 거꾸로)
+function sortBy(key) {
+  S.sortUser = true;
+  if (S.sort.key === key) S.sort.dir *= -1;
+  else S.sort = { key, dir: key === 'name' || key === 'dir' ? 1 : -1 };
+  const cur = S.cursor != null && S.items[S.cursor] ? S.items[S.cursor].path : null;
+  sortItems();
+  S.cursor = cur ? S.items.findIndex((i) => i.path === cur) : null;
+  S.anchor = S.cursor;
+  renderTable();
+  renderToolbar();
+}
+$('#sortBtn').addEventListener('click', () => {
+  const r = $('#sortBtn').getBoundingClientRect();
+  const keys = [['score', '정확도순'], ['name', '이름'], ['dir', '위치'], ['size', '크기'], ['mtime', '수정일']];
+  showMenu(r.left, r.bottom + 6, keys.map(([k, t]) => [k, t + (S.sort.key === k ? (S.sort.dir === 1 ? ' ▴' : ' ▾') : ''), '', S.sort.key === k ? 'on' : '']),
+    Object.fromEntries(keys.map(([k]) => [k, () => sortBy(k)])));
+});
+function gridCols() {
+  if (S.view !== 'cards') return 1;
+  return Math.max(1, getComputedStyle(tbody).gridTemplateColumns.split(' ').filter(Boolean).length);
 }
 
 function updateSelectionView() {
@@ -951,6 +1056,7 @@ document.addEventListener('contextmenu', (e) => {
 function moveCursor(delta, extend) {
   if (!S.items.length) return;
   let i = S.cursor == null ? (delta > 0 ? 0 : S.items.length - 1) : S.cursor + delta;
+  if (S.cursor != null && Math.abs(delta) > 1 && Math.abs(delta) < 1e9 && (i < 0 || i >= S.items.length)) return; // 카드 맨 윗줄 · 맨 아랫줄
   i = Math.max(0, Math.min(S.items.length - 1, i));
   if (extend && S.anchor != null) {
     selectRange(S.anchor, i, false);
@@ -1231,7 +1337,8 @@ $('#menu').addEventListener('click', (e) => {
 });
 document.addEventListener('mousedown', (e) => {
   if (!$('#menu').hidden && !e.target.closest('#menu')) closeMenu();
-  if (!$('#extPop').hidden && !e.target.closest('#extPop, #extPick')) toggleExtPop(false);
+  if (!$('#extPop').hidden && !e.target.closest('#extPop, #extPick, [data-pickext]')) toggleExtPop(false);
+  if (document.body.classList.contains('scope-open') && !e.target.closest('#scopeCard, #scopeBtn')) toggleScopePop(false);
   if (!$('#updPop').hidden && !e.target.closest('.upd-wrap')) togglePop(false);
 });
 window.addEventListener('blur', closeMenu);
@@ -1244,7 +1351,7 @@ function renderPreview() {
   const body = $('#pvBody');
   const items = selItems();
   if (!items.length) {
-    body.innerHTML = `<div class="pv-empty">${S.items.length ? '파일을 선택하면 여기에 미리보기가 표시됩니다.' : '검색 결과에서 파일을 고르면 여기에 미리보기가 나와요.'}</div>`;
+    body.innerHTML = `<div class="pv-empty">${S.items.length ? '파일을 고르면<br>여기에 미리보기가 나와요' : '결과에서 파일을 고르면<br>여기에 미리보기가 나와요'}</div>`;
     return;
   }
   if (items.length > 1) {
@@ -1476,6 +1583,11 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { e.preventDefault(); closeDialog(false); }
     return;
   }
+  if (!$('#keysDlg').hidden) {
+    if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); toggleKeys(false); }
+    return;
+  }
+  if (document.body.classList.contains('scope-open') && e.key === 'Escape') { e.preventDefault(); toggleScopePop(false); return; }
   if (!$('#menu').hidden) {
     if (e.key === 'Escape') { e.preventDefault(); closeMenu(); }
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -1501,7 +1613,7 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   // ⌫ · ⌘[ = 이전 검색으로 (글 칸 · 한글 조합 중 · 떠 있는 창이 열려 있을 때는 위에서 이미 걸러져요)
-  if (!e.isComposing && $('#updPop').hidden && $('#extPop').hidden && ((e.key === 'Backspace' && !mod && !e.altKey && !e.shiftKey) || (mod && e.code === 'BracketLeft'))) {
+  if (!e.isComposing && $('#updPop').hidden && $('#extPop').hidden && !document.body.classList.contains('scope-open') && ((e.key === 'Backspace' && !mod && !e.altKey && !e.shiftKey) || (mod && e.code === 'BracketLeft'))) {
     e.preventDefault(); goBack(); return;
   }
   // 다른 곳의 글자를 골라 둔 상태면 ⌘C 는 그 글자를 복사해요
@@ -1524,8 +1636,9 @@ document.addEventListener('keydown', (e) => {
   if (mod && e.code === 'KeyO') { e.preventDefault(); openItems(selPaths()); return; }
   if (e.key === ' ' && !e.target.closest('button')) { e.preventDefault(); quickLook(); return; }
   if (e.key === 'Enter' && !e.target.closest('button')) { e.preventDefault(); openItems(selPaths()); return; }
-  if (e.key === 'ArrowDown') { e.preventDefault(); moveCursor(1, e.shiftKey); return; }
-  if (e.key === 'ArrowUp') { e.preventDefault(); moveCursor(-1, e.shiftKey); return; }
+  if (e.key === 'ArrowDown') { e.preventDefault(); moveCursor(gridCols(), e.shiftKey); return; }
+  if (e.key === 'ArrowUp') { e.preventDefault(); moveCursor(-gridCols(), e.shiftKey); return; }
+  if (S.view === 'cards' && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) { e.preventDefault(); moveCursor(e.key === 'ArrowRight' ? 1 : -1, e.shiftKey); return; }
   if (e.key === 'Home') { e.preventDefault(); moveCursor(-1e9, e.shiftKey); return; }
   if (e.key === 'End') { e.preventDefault(); moveCursor(1e9, e.shiftKey); return; }
 });
@@ -1546,6 +1659,16 @@ function reportDrag() {
 function renderKeys() {
   $('#keys').innerHTML = KEYS.map(([k, d]) => `<div class="key"><span>${d}</span><kbd>${k}</kbd></div>`).join('');
 }
+function toggleKeys(open) {
+  const dlg = $('#keysDlg');
+  open = open ?? dlg.hidden;
+  dlg.hidden = !open;
+  if (open) $('#keysClose').focus(); else $('#keysBtn').focus();
+}
+$('#keysBtn').addEventListener('click', () => toggleKeys(true));
+$('#keysClose').addEventListener('click', () => toggleKeys(false));
+$('#keysDlg').addEventListener('mousedown', (e) => { if (e.target.id === 'keysDlg') toggleKeys(false); });
+$('#backBtn').addEventListener('click', () => goBack());
 
 async function init() {
   document.body.classList.toggle('native', NATIVE);
@@ -1565,10 +1688,12 @@ async function init() {
     S.home = st.home || '';
     S.build = st.build || '';
     S.update = st.update || null;
+    if (st.ui && (st.ui.view === 'list' || st.ui.view === 'cards')) S.view = st.ui.view;
   } catch (e) {
     setStatus(e.message);
   }
   applyTheme();
+  setView(S.view);
   renderScope();
   renderDests();
   renderExts();

@@ -408,7 +408,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     func startFailed(_ error: Error) {
         let a = NSAlert()
         a.alertStyle = .warning
-        a.messageText = "FINDEROAD를 시작하지 못했어요"
+        a.messageText = "FindeROAD를 시작하지 못했어요"
         a.informativeText = "\(error.localizedDescription)\n앱을 다시 실행해 보세요. 계속 안 되면 맥을 재시동한 뒤 시도해 주세요."
         a.addButton(withTitle: "다시 시도")
         a.addButton(withTitle: "종료")
@@ -508,7 +508,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         window = MainWindow(contentRect: NSRect(x: 0, y: 0, width: 1320, height: 860),
                             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                             backing: .buffered, defer: false)
-        window.title = "FINDEROAD"
+        window.title = "FindeROAD"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isMovableByWindowBackground = false
@@ -582,12 +582,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         <!doctype html><meta charset="utf-8"><style>
         :root{color-scheme:light dark}
         body{margin:0;height:100vh;display:grid;place-items:center;font:600 13px -apple-system,"Apple SD Gothic Neo",sans-serif;
-             background:#F4F4F1;color:#5E5E66}
-        @media (prefers-color-scheme: dark){body{background:#111113;color:#A1A1AA}}
+             background:#F3F7F4;color:#5B6A60}
+        @media (prefers-color-scheme: dark){body{background:#0D110F;color:#95A69B}}
         .w{display:flex;flex-direction:column;align-items:center;gap:14px}
-        .s{width:22px;height:22px;border-radius:50%;border:2.5px solid rgba(128,128,128,.3);border-top-color:#C2410C;animation:r .9s linear infinite}
+        .s{width:22px;height:22px;border-radius:50%;border:2.5px solid rgba(128,128,128,.3);border-top-color:#0B8A5F;animation:r .9s linear infinite}
         @keyframes r{to{transform:rotate(360deg)}}
-        </style><div class="w"><div class="s"></div>FINDEROAD 준비 중…</div>
+        </style><div class="w"><div class="s"></div>FindeROAD 준비 중…</div>
         """
         web.loadHTMLString(html, baseURL: nil)
     }
@@ -778,16 +778,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let appItem = NSMenuItem()
         main.addItem(appItem)
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "FINDEROAD에 관하여", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(withTitle: "FindeROAD에 관하여", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         let upd = appMenu.addItem(withTitle: "업데이트 확인…", action: #selector(checkForUpdates), keyEquivalent: "")
         upd.target = self
         appMenu.addItem(NSMenuItem.separator())
-        appMenu.addItem(withTitle: "FINDEROAD 가리기", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        appMenu.addItem(withTitle: "FindeROAD 가리기", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         let others = appMenu.addItem(withTitle: "기타 가리기", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
         others.keyEquivalentModifierMask = [.command, .option]
         appMenu.addItem(withTitle: "모두 보기", action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: "")
         appMenu.addItem(NSMenuItem.separator())
-        appMenu.addItem(withTitle: "FINDEROAD 종료", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: "FindeROAD 종료", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
 
         let editItem = NSMenuItem()
@@ -820,7 +820,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         win.addItem(withTitle: "확대/축소", action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
         win.addItem(withTitle: "닫기", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
         win.addItem(NSMenuItem.separator())
-        let show = win.addItem(withTitle: "FINDEROAD 창 보기", action: #selector(showMain), keyEquivalent: "")
+        let show = win.addItem(withTitle: "FindeROAD 창 보기", action: #selector(showMain), keyEquivalent: "")
         show.target = self
         winItem.submenu = win
 
