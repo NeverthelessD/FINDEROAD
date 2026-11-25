@@ -6,7 +6,7 @@ let appName = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "FIND
 
 func bounds() -> CGRect? {
     let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
-    for w in list where (w[kCGWindowOwnerName as String] as? String) == appName && (w[kCGWindowLayer as String] as? Int) == 0 {
+    for w in list where (w[kCGWindowOwnerName as String] as? String)?.lowercased() == appName.lowercased() && (w[kCGWindowLayer as String] as? Int) == 0 {
         if let d = w[kCGWindowBounds as String] as? NSDictionary, let r = CGRect(dictionaryRepresentation: d), r.width > 300 { return r }
     }
     return nil
